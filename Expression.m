@@ -291,15 +291,9 @@ classdef Expression
 			% substitution
 			for tInd = 1:numTerms_
 				
-				% Construct the variable
-				auxVar = Variable();
-				auxVar.label = sprintf('a%u',Variable.getNextAuxIndex());
-				% Declare what it could be, based on the thing it's equal
-				% to. This ensures the possibleValues is set at least
-				% moderately well.
-				auxVar.possibleValues = naiveValueSets(tInd);
-				% Record this new variable, for goot measure
-				Variable.recordAuxVar(auxVar);
+				% Construct the variable and initialize its values with our
+				% naive expectation.
+				auxVar = Variable.auxVarCreationHelper( naiveValueSets(tInd) );
 				
 				% Include this new variable in the current expression
 				switch FIs(tInd)

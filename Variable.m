@@ -119,6 +119,19 @@ classdef Variable < handle
 			end
 		end
 	end
+	methods (Static)
+		function auxVar = auxVarCreationHelper(initialValueSet)
+			% Construct the variable
+			auxVar = Variable();
+			auxVar.label = sprintf('a%u',Variable.getNextAuxIndex());
+			% Declare what it could be, based on the thing it's equal
+			% to. This ensures the possibleValues is set at least
+			% moderately well.
+			auxVar.possibleValues = initialValueSet;
+			% Record this new variable, for goot measure
+			Variable.recordAuxVar(auxVar);
+		end
+	end
 	
 	methods (Static)
 		function clearGlobal()
