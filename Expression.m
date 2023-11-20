@@ -61,23 +61,149 @@ classdef Expression
 			% Ensure we retain carry the auxiliary equations
 			exprB.auxEqs = exprA.auxEqs;
 		end
-		function exprC = times(~,~) %#ok<STOUT>
-			error('Expression multiplication not supported. Something went wrong');
+		function exprC = times(exprA,B)
+			assert( isa(B,'Variable'),'Expressions are only supported for multiplication with a single variable')
+			varB = B; % relabel
+			
+			% We're going to handle the terms like so
+			%   (a + b*c + d/e) * f = a*f + [b*c]*f + [d*f]/e
+			% (note the signs can be flipped in the obvious way)
+			% 
+			% The square brackets [] represent quantities replaced with an
+			% auxiliary variable, so that the expressions remain locally
+			% simple and of the form that this framework supports.
+			% This choice of *which* things we abstract off with aux
+			% variables extends nicely to keeping the division operation as
+			% the outer-most operation of the multiplication and division.
+			% This leaves the integer-division constraints as conservative
+			% as possible.
+			
+			exprC = Expression();
+			% Copy any existing auxiliary equations
+			exprC.auxEqs = exprA.auxEqs;
+			
+			% Sweep through the contents of exprA
+			[FIs,LIs] = exprA.lookup( 1:exprA.numTerms );
+			for k = 1:numel(FIs)
+				vars = exprA.(exprA.fields{FIs(k)})(:,LIs(k));
+				
+				% Prepare an auxiliary variable and equation if relevant
+				if ismember( FIs(k), [3,4,5,6] )
+					
+					% The new equation will be of the form
+					%    -auxVar + U*V = 0
+					% where U,V are variables.
+					U = vars(1); % For both mult and div cases, this is true
+					switch FIs(k)
+						case {3,5} % original term was multipliction
+							V = vars(2);
+						case {4,6} % original term was division
+							V = varB;
+					end
+					
+					% Construct the auxiliary variable
+					naivePossibleValues = U.possibleValues * V.possibleValues;
+					auxVar = Variable.auxVarCreationHelper(naivePossibleValues);
+					% Prepare the auxiliar expression it will be used in
+					auxExpr = Expression();
+					auxExpr.varList_M(1) = auxVar;
+					auxExpr.varList_P_times(:,1) = [U;V]; % new eq is always multiplication
+					% Create the equation representing auxExpr = 0
+					exprC = constructAndRecordAuxEq(exprC,auxExpr); % no parent label now, defer to later
+					
+				end
+				switch FIs(k)
+					case 1 % varList_P
+						exprC = exprC + (vars(1)*varB);
+					case 2 % varList_M
+						exprC = exprC - (vars(1)*varB);
+					case 3 % varList_P_times
+						exprC = exprC + (auxVar*varB);
+					case 4 % varList_P_divide
+						exprC = exprC + (auxVar/vars(2));
+					case 5 % varList_M_times
+						exprC = exprC - (auxVar*varB);
+					case 6 % varList_M_divide
+						exprC = exprC - (auxVar/vars(2));
+					otherwise
+						error('Unsupported case');
+				end
+			end
+			
 		end
-		function exprC = rdivide(~,~) %#ok<STOUT>
-			error('Expression division not supported. Something went wrong');
+		function exprC = rdivide(exprA,B)
+			
+			% This code is almost identical to times(). I've stripped out
+			% all the comments from that implementation. All ways that this
+			% differs from that are called out with comments.
+			
+			assert( isa(B,'Variable'),'Expressions are only supported for multiplication with a single variable')
+			varB = B;
+			
+			% The behavior relevant to division is
+			%   (a + b*c + d/e) / f = a/f + [b*c]/f + d/[e*f]
+			
+			exprC = Expression();
+			exprC.auxEqs = exprA.auxEqs;
+			
+			[FIs,LIs] = exprA.lookup( 1:exprA.numTerms );
+			for k = 1:numel(FIs)
+				vars = exprA.(exprA.fields{FIs(k)})(:,LIs(k));
+				
+				if ismember( FIs(k), [3,4,5,6] )
+					
+					% U definition moved into switch block
+					switch FIs(k)
+						case {3,5} % STILL multipliction
+							U = vars(1); % new
+							V = vars(2); % new
+						case {4,6} % STILL division
+							U = vars(2); % new
+							V = varB;
+					end
+					
+					naivePossibleValues = U.possibleValues * V.possibleValues;
+					auxVar = Variable.auxVarCreationHelper(naivePossibleValues);
+					
+					auxExpr = Expression();
+					auxExpr.varList_M(1) = auxVar;
+					auxExpr.varList_P_times(:,1) = [U;V];
+					
+					exprC = constructAndRecordAuxEq(exprC,auxExpr);
+					
+				end
+				switch FIs(k)
+					case 1 % STILL varList_P
+						exprC = exprC + (vars(1)/varB); % new
+					case 2 % STILL varList_M
+						exprC = exprC - (vars(1)/varB); % new
+					case 3 % STILL varList_P_times
+						exprC = exprC + (auxVar/varB); % new
+					case 4 % STILL varList_P_divide
+						exprC = exprC + (vars(1)/auxVar); % new
+					case 5 % STILL varList_M_times
+						exprC = exprC - (auxVar/varB); % new
+					case 6 % STILL varList_M_divide
+						exprC = exprC - (vars(1)/auxVar); % new
+					otherwise
+						error('Unsupported case');
+				end
+			end
 		end
 		function exprC = ldivide(~,~) %#ok<STOUT>
-			error('Expression division not supported. Something went wrong');
+			error('Left division of an expression is not supported (it means you''re dividing by something complicated...)');
 		end
-		function exprC = mtimes(~,~) %#ok<STOUT>
-			error('Expression multiplication not supported. Something went wrong');
+		function exprC = mtimes(exprA,B)
+			% Defer to the non-matrix operation
+			exprC = times(exprA,B);
 		end
-		function exprC = mrdivide(~,~) %#ok<STOUT>
-			error('Expression division not supported. Something went wrong');
+		function exprC = mrdivide(exprA,B)
+			% Defer to the non-matrix operation
+			exprC = rdivide(exprA,B);
 		end
-		function exprC = mldivide(~,~) %#ok<STOUT>
-			error('Expression division not supported. Something went wrong');
+		function exprC = mldivide(exprA,B)
+			% Defer to the non-matrix operation
+			exprC = ldivide(exprA,B);
 		end
 		function eqC = eq(exprA,B)
 			% Try to form an equation

@@ -34,6 +34,16 @@ classdef Equation < handle
 			% Register this equation
 			Equation.addEquation(eq_);
 			
+			% Determine if any of the LHS's aux equations need their name
+			% updated
+			needsFixing = strcmp( {eq_.LHS.auxEqs.label}, '?' );
+ 			for k = 1:numel(needsFixing)
+				if needsFixing(k)
+					eq_.LHS.auxEqs(k).label = sprintf('%s%s', eq_.label, getExcelColumnLabel(k));
+					fprintf('<RNM> %s\n',eq_.LHS.auxEqs(k).toString);
+				end
+			end
+			
 			% Try to simplify the equation. Only perform this if we're not
 			% working with an auxiliary equation already
 			quants = eq_.LHS.numTermsByType;
