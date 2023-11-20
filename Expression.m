@@ -324,13 +324,7 @@ classdef Expression
 				end
 				
 				% And finally, create the equation
-				sublabel = getExcelColumnLabel( numel(expr.auxEqs)+1 );
-				eqLabel = sprintf('%s%s',parentLabel,sublabel);
-				auxEq = Equation(auxExpr,0,eqLabel);
-				% The new equation will be gathered by the static/global
-				% Equation behavior. We'll also record a copy on the
-				% expression itself
-				expr.auxEqs(end+1,:) = auxEq;
+				expr = constructAndRecordAuxEq(expr,auxExpr,parentLabel);
 				
 			end
 			
@@ -403,6 +397,22 @@ classdef Expression
 			else
 				termIndices_ = termIndicesOrBool;
 			end
+		end
+	end
+	methods (Access = private)
+		function expr = constructAndRecordAuxEq(expr,auxExpr,parentLabel)
+			
+			if exist('parentLabel','var')
+				sublabel = getExcelColumnLabel( numel(expr.auxEqs)+1 );
+				eqLabel = sprintf('%s%s',parentLabel,sublabel);
+			else
+				eqLabel = '?'; % defer meaningful setting to later
+			end
+			auxEq = Equation(auxExpr,0,eqLabel);
+			% The new equation will be gathered by the static/global
+			% Equation behavior. We'll also record a copy on the
+			% expression itself
+			expr.auxEqs(end+1,:) = auxEq;
 		end
 	end
 end
