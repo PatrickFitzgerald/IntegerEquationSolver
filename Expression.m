@@ -29,7 +29,7 @@ classdef Expression
 				exprC.varList_M_times  = [ exprA.varList_M_times,  B.varList_M_times  ];
 				exprC.varList_M_divide = [ exprA.varList_M_divide, B.varList_M_divide ];
 				% Ensure we retain the auxiliary equations from both inputs
-				exprC.auxEqs = [exprA.auxEqs;exprB.auxEqs];
+				exprC.auxEqs = [exprA.auxEqs;B.auxEqs];
 			elseif isa(B,'Variable')
 				exprC = exprA; % build off exprA
 				exprC.varList_P = [ exprC.varList_P, B ]; % add to the plus() list
