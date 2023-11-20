@@ -78,6 +78,10 @@ classdef Expression
 			% This leaves the integer-division constraints as conservative
 			% as possible.
 			
+% TODO: There may be cases where we don't want to distribute an
+% expression... e.g. when representing (3+7)/10 --> 3/10 is not valid, nor
+% is 7/10, but if the parentheses are respected then the eq is valid...
+			
 			exprC = Expression();
 			% Copy any existing auxiliary equations
 			exprC.auxEqs = exprA.auxEqs;
