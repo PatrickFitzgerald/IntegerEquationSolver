@@ -499,6 +499,11 @@ classdef Expression
 					% This last operation also ensures that the results are
 					% integers, since the allowed values must already be
 					% integers.
+					% Determine if thes variables belong to a common
+					% uniqueness family. If so, enforce their uniqueness.
+					if any(ismember(vars(1).uniqueFamilyIDs,vars(2).uniqueFamilyIDs))
+						compatibilityMatrix = compatibilityMatrix & (A(:) ~= B(:).');
+					end
 					
 					% Downselect the lists of values if there are any
 					% values (on a per-variable basis) that are not

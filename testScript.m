@@ -2,6 +2,7 @@ clear all
 
 Variable.clearGlobal()
 Equation.clearList()
+UniquenessManager.clearGlobal()
 
 xsol=nan(10);
 xsol(5:7,1)=[91;86;32];
@@ -26,6 +27,9 @@ end
 % 		x(ii,jj).label = sprintf('x(%02u,%02u)',ii,jj);
 % 	end
 % end
+
+% Declare that all entries of x will be mutually unique
+UniquenessManager.declareUniqueFamily(x);
 
 fullRange = SetOfIntegers.makeRange(1,100);
 usedValues = SetOfIntegers.makeList( xsol(~isnan(xsol)) );

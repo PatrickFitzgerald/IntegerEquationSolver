@@ -3,6 +3,7 @@ classdef Variable < handle
 	properties
 		label char = '';
 		possibleValues (1,1) SetOfIntegers = SetOfIntegers(); % empty by default
+		uniqueFamilyIDs (1,:) uint16 = uint16.empty(1,0); % One entry for each uniqueness group that this variable belongs to
 	end
 	methods % setters
 		function set.possibleValues(var_,pV)
