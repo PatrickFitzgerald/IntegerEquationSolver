@@ -77,7 +77,7 @@ classdef Equation < handle
 			end
 		end
 		
-		function refine(eq_)
+		function changed = refine(eq_)
 			
 % TODO: there will be equations (primarily auxiliary equations) that have
 % RHS values with more options than what the LHS will ever use (i.e. the
@@ -86,7 +86,7 @@ classdef Equation < handle
 % i.e. cardinality on RHS = 0
 			
 			% Remove solved terms
-			rearrangeConstants(eq_);
+			changed = rearrangeConstants(eq_);
 			
 			% Get a list of values
 			numTerms = eq_.LHS.numTerms;
@@ -108,12 +108,12 @@ classdef Equation < handle
 				% Apply this constraint (even if it doesn't look like
 				% anything useful now, it still may be, so just do them
 				% all).
-				eq_.LHS.applyConstraint(omitInd,proposedValues);
+				changed = changed | eq_.LHS.applyConstraint(omitInd,proposedValues); % NOT using ||, since that would prevent applyConstraint() from running.
 				
 			end
 			
 		end
-		function rearrangeConstants(eq_)
+		function changed = rearrangeConstants(eq_)
 			
 			% Get a copy of the values for all the completely solved terms
 			numTerms = eq_.LHS.numTerms;
@@ -130,8 +130,10 @@ classdef Equation < handle
 				eq_.RHS = eq_.RHS - valueSets(k);
 			end
 			
+			changed = false;
 			if any(isSolvedVec)
 				fprintf('<UPD> %s\n',eq_.toString())
+				changed = true;
 			end
 			
 		end

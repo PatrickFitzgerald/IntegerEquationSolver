@@ -461,7 +461,7 @@ classdef Expression
 		end
 	end
 	methods
-		function applyConstraint(expr,termIndex,allowedSet)
+		function changed = applyConstraint(expr,termIndex,allowedSet)
 			
 			% Look up the relevant content
 			[fieldInd,localInd] = expr.lookup(termIndex);
@@ -519,8 +519,10 @@ classdef Expression
 			
 			% Determine if we changed anything...
 			endingCardinality = prod(arrayfun( @(v) cardinality(v.possibleValues), vars ));
+			changed = false;
 			if startingCardinality > endingCardinality
 				fprintf('Constrained possibilities by 10^%.2f\n',log10(startingCardinality/endingCardinality));
+				changed = true;
 			end
 			
 		end

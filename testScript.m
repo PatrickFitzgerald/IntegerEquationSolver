@@ -66,9 +66,13 @@ x( 71) + x( 72) - x( 73) - x( 74) - x( 75) - x( 76) * x( 77) - x( 78) - x( 79) +
 x( 81) + x( 82) / x( 83) + x( 84) * x( 85) + x( 86) + x( 87) + x( 88) + x( 89) - x( 90) == 1632;
 x( 91) + x( 92) + x( 93) + x( 94) - x( 95) - x( 96) - x( 97) + x( 98) * x( 99) + x(100) == 1717;
 
-
-
-for retry = 1:5
+%%
+% Repeat this loop of manipulating equations until eventually nothing
+% changes.
+anyChanges = true;
+while anyChanges
+	anyChanges = false;
+	
 	% Count the trade-space of x
 	log10Possibilities = 0;
 	for q = 1:numel(x)
@@ -79,14 +83,19 @@ for retry = 1:5
 	% Refine the domain
 	eqList = Equation.getEqList();
 	for k = 1:numel(eqList)
-		eqList(k).refine();
+		changed = eqList(k).refine();
+		anyChanges = anyChanges || changed;
 	end
+	
+	changed = UniquenessManager.enforceUniqueness();
+	anyChanges = anyChanges || changed;
 	
 end
 
-
+%%
 
 eqList = Equation.getEqList();
 eqList
 x
 Variable.getAuxVars()
+
