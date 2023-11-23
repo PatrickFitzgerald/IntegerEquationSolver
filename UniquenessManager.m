@@ -24,6 +24,60 @@ classdef UniquenessManager
 			familyMembers = UniquenessManager.generalVariableStorage('getAllFamilies');
 			familyIDs = uint16(1:numel(familyMembers));
 		end
+		function changed = enforceUniqueness()
+			
+			changed = false;
+			
+			% Extract all families
+			allFamilyMembers = UniquenessManager.generalVariableStorage('getAllFamilies');
+			% Loop over them
+			for fInd = 1:numel(allFamilyMembers)
+				variables = allFamilyMembers{fInd};
+				
+				% For now, I'm only going to implement singleton
+				% uniqueness. There's a lot more we can do here, but the
+				% algorithms will become much more complicated, and likely
+				% much slower...
+				
+				% Extract a list of all values which are represented in
+				% solved variables.
+				isSolved = getIsSolved(variables);
+				solvedNumbers = arrayfun( @(v) v.possibleValues.expand(), variables(isSolved) ); % each returns a scalar, so concatenating is fine
+				% Ensure the list is unique. If there are repeats, then
+				% something went wrong and we have an invalid solution
+				assert( numel(solvedNumbers) == numel(unique(solvedNumbers)),...
+					'UniquenessManager:invalidSolution',...
+					'The solver reached an invalid state: variables that are supposed to have unique values do not');
+				
+				totalStartingLog10 = 0;
+				totalEndingLog10 = 0;
+				
+				% Ensure this list of numbers is disallowed from all other
+				% variables in this family
+				removeSet = SetOfIntegers.makeList(solvedNumbers);
+				for vInd = find(~isSolved).'
+					startingSet = variables(vInd).possibleValues;
+					startingCardinality = cardinality(startingSet);
+					% Remove solved numbers
+					endingSet = SetOfIntegers.setSubtract(startingSet,removeSet);
+					% Determine if we improved anything
+					endingCardinality = cardinality(endingSet);
+					if endingCardinality < startingCardinality
+						totalStartingLog10 = totalStartingLog10 + log10(startingCardinality);
+						totalEndingLog10   = totalEndingLog10   + log10(endingCardinality);
+						% Assign the confined set
+						variables(vInd).possibleValues = endingSet;
+						changed = true;
+					end
+				end
+				
+				% Only report progress once per family
+				if totalEndingLog10 < totalStartingLog10
+					fprintf('Constrained possibilities by uniqueness by 10^%.2f\n',totalStartingLog10 - totalEndingLog10)
+				end
+				
+			end
+		end
 	end
 	methods (Static, Access = private)
 		function varargout = generalVariableStorage(mode,varargin)

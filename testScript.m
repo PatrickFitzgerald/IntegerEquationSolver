@@ -21,6 +21,11 @@ for k = 1:numel(x)
 	x(k) = Variable();
 	x(k).label = sprintf('x%u',k);
 % 	x(k).label = sprintf('x03%u',k);
+	if ~isnan( xsol(k) )
+		x(k).possibleValues = SetOfIntegers.makeConstant( xsol(k) ); % constant value, already solved
+	else
+		x(k).possibleValues = SetOfIntegers.makeRange(1,100); % inclusive
+	end
 end
 % for ii = 1:10
 % 	for jj = 1:10
@@ -28,21 +33,14 @@ end
 % 	end
 % end
 
+% Report the initial problem size
+reportNaiveTradeSpaceSize(x);
+
 % Declare that all entries of x will be mutually unique
 UniquenessManager.declareUniqueFamily(x);
 
-fullRange = SetOfIntegers.makeRange(1,100);
-usedValues = SetOfIntegers.makeList( xsol(~isnan(xsol)) );
-remainingNumbers = SetOfIntegers.setSubtract( fullRange, usedValues );
-
-
-for k = 1:numel(x)
-	if isnan( xsol(k) )
-		x(k).possibleValues = remainingNumbers; % nothing known, all remaining
-	else % not nan
-		x(k).possibleValues = SetOfIntegers.makeConstant( xsol(k) ); % constant value, already solved
-	end
-end
+% Apply the uniqueness constraints
+UniquenessManager.enforceUniqueness();
 
 
 x(  1) + x( 11) - x( 21) - x( 31) - x( 41) + x( 51) - x( 61) - x( 71) + x( 81) * x( 91) == 297;
