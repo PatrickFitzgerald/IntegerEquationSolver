@@ -65,25 +65,7 @@ x( 81) + x( 82) / x( 83) + x( 84) * x( 85) + x( 86) + x( 87) + x( 88) + x( 89) -
 x( 91) + x( 92) + x( 93) + x( 94) - x( 95) - x( 96) - x( 97) + x( 98) * x( 99) + x(100) == 1717;
 
 %%
-% Repeat this loop of manipulating equations until eventually nothing
-% changes.
-anyChanges = true;
-while anyChanges
-	anyChanges = false;
-	
-	reportNaiveTradeSpaceSize(x)
-	
-	% Refine the domain
-	eqList = Equation.getEqList();
-	for k = 1:numel(eqList)
-		changed = eqList(k).refine();
-		anyChanges = anyChanges || changed;
-	end
-	
-	changed = UniquenessManager.enforceUniqueness();
-	anyChanges = anyChanges || changed;
-	
-end
+refineEqsToConvergence(x);
 
 %%
 
@@ -99,4 +81,25 @@ function reportNaiveTradeSpaceSize(x)
 		log10Possibilities = log10Possibilities + log10(cardinality(x(q).possibleValues));
 	end
 	fprintf('[\bCurrent trade-space is of size 10^%.2f]\b\n',log10Possibilities);
+end
+function refineEqsToConvergence(x)
+	% Repeat this loop of manipulating equations until eventually nothing
+	% changes.
+	anyChanges = true;
+	while anyChanges
+		anyChanges = false;
+		
+		reportNaiveTradeSpaceSize(x)
+		
+		% Refine the domain
+		eqList = Equation.getEqList();
+		for k = 1:numel(eqList)
+			changed = eqList(k).refine();
+			anyChanges = anyChanges || changed;
+		end
+		
+		changed = UniquenessManager.enforceUniqueness();
+		anyChanges = anyChanges || changed;
+		
+	end
 end
