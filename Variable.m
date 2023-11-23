@@ -2,14 +2,23 @@ classdef Variable < handle
 	
 	properties
 		label char = '';
-		possibleValues (1,1) SetOfIntegers = SetOfIntegers(); % empty by default
+		possibleValues (1,1) = SetOfIntegers(); % empty by default
 		uniqueFamilyIDs (1,:) uint16 = uint16.empty(1,0); % One entry for each uniqueness group that this variable belongs to
 	end
 	methods % setters
 		function set.possibleValues(var_,pV)
+			
+			% If the input is numeric instead of a set of integers, cast it
+			% to the right type, out of convenience.
+			if isnumeric(pV)
+				pV = SetOfIntegers.makeList(pV);
+			end
+			
 			% We should never assign an empty set... (i.e. an invalid
 			% solution)
-			assert( cardinality(pV)>0, 'Attempted to lock in an invalid solution');
+			assert( cardinality(pV)>0,...
+				'Variable:invalidSolution',...
+				'Attempted to lock in an invalid solution');
 			var_.possibleValues = pV;
 		end
 	end

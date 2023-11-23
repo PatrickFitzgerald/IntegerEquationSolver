@@ -73,12 +73,7 @@ anyChanges = true;
 while anyChanges
 	anyChanges = false;
 	
-	% Count the trade-space of x
-	log10Possibilities = 0;
-	for q = 1:numel(x)
-		log10Possibilities = log10Possibilities + log10(cardinality(x(q).possibleValues));
-	end
-	fprintf('[\bCurrent trade-space is of size 10^%.2f]\b\n',log10Possibilities);
+	reportNaiveTradeSpaceSize(x)
 	
 	% Refine the domain
 	eqList = Equation.getEqList();
@@ -99,3 +94,11 @@ eqList
 x
 Variable.getAuxVars()
 
+function reportNaiveTradeSpaceSize(x)
+	% Count the trade-space of x
+	log10Possibilities = 0;
+	for q = 1:numel(x)
+		log10Possibilities = log10Possibilities + log10(cardinality(x(q).possibleValues));
+	end
+	fprintf('[\bCurrent trade-space is of size 10^%.2f]\b\n',log10Possibilities);
+end
