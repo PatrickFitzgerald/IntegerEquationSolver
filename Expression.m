@@ -1,201 +1,164 @@
-classdef Expression
+classdef Expression % non-handle
 	
-	% All variable lists are added (after their respective operations)
-	properties
-		varList_P        (1,:) Variable = Variable.empty(1,0);
-		varList_M        (1,:) Variable = Variable.empty(1,0);
-		varList_P_times  (2,:) Variable = Variable.empty(2,0); % +var * var
-		varList_P_divide (2,:) Variable = Variable.empty(2,0); % +var / var
-		varList_M_times  (2,:) Variable = Variable.empty(2,0); % -var * var
-		varList_M_divide (2,:) Variable = Variable.empty(2,0); % -var / var
-	end
-	properties
+	% NOTE: Any division symbol is interpreted as EXCLUSIVELY performing
+	% division on valid, divisible inputs. For example
+	%    (1/2) / (1/2) is NOT valid, because (1/2) is not valid division.
+	% Another way of saying this is that division cannot be rearranged
+	% across parentheses to circumvent divisibility constraints.
+	
+	% All variable lists are added (after their respective operations) with
+	% their corresponding signs
+	properties (GetAccess = public, SetAccess = private)
+		signs     (1,:) double = double.empty(1,0); % +1 or -1
+		termTypes (1,:) double = double.empty(1,0); % see description below
+		termVars  (2,:)   cell = cell(2,0); % each column indicates the variables to be used in each term
+		% The rows of `termVars` have different meanings (or are unused)
+		% depending on which termType is listed
+		% 
+		%  Type  Meaning             Description
+		%   1     vars{1}             no-op
+		%   2     vars{1} * vars{2}   multiplication
+		%   3     vars{1} / vars{2}   division
+		
 		auxEqs (:,1) Equation = Equation.empty(0,1);
 	end
+	properties (GetAccess = public, SetAccess = private, Dependent)
+		numTerms;
+	end
+	methods % Getters
+		function val = get.numTerms(expr)
+			val = numel(expr.termTypes);
+		end
+	end
 	
+	
+	% * * * * * * * * * OVERLOADED OPERATORS/FUNCTIONS * * * * * * * * * *
 	% The overloaded operators depend on the matlab parsing engine to still
-	% execute them following the standard order of operations. Thus, an
-	% expression will never be divided or multiplied directly
-	methods
+	% execute them following the standard order of operations
+	methods (Access = public)
+		% If these functions/operators were invoked, then we are confident
+		% the first arument is a "Expression" because of matlab's
+		% dispatching mechanisms. No type checking necessary
 		function exprC = plus(exprA,B)
-			% If this function was invoked, then A is an expression
-			if isa(B,'Expression')
-				% Just combine expressions, since everything is added
-				exprC = Expression();
-				exprC.varList_P        = [ exprA.varList_P,        B.varList_P ];
-				exprC.varList_M        = [ exprA.varList_M,        B.varList_M ];
-				exprC.varList_P_times  = [ exprA.varList_P_times,  B.varList_P_times  ];
-				exprC.varList_P_divide = [ exprA.varList_P_divide, B.varList_P_divide ];
-				exprC.varList_M_times  = [ exprA.varList_M_times,  B.varList_M_times  ];
-				exprC.varList_M_divide = [ exprA.varList_M_divide, B.varList_M_divide ];
-				% Ensure we retain the auxiliary equations from both inputs
-				exprC.auxEqs = [exprA.auxEqs;B.auxEqs];
-			elseif isa(B,'Variable')
-				exprC = exprA; % build off exprA
-				exprC.varList_P = [ exprC.varList_P, B ]; % add to the plus() list
+			assert(isscalar(exprA),'Arithmetic is only supported on scalar Expressions');
+			
+			if isa(B,'Variable')
+				% Cast B to an expression
+				exprB = Expression.fromVariable( B );
+			elseif isa(B,'Expression')
+				exprB = B;
 			else
 				error('Unexpected operation with unknown type')
 			end
+			% Both A and B are now expressions
+			
+			% Addition means concatenation of our term lists, with no
+			% modification of the signs
+			exprC = Expression();
+			exprC.signs     = [exprA.signs,     exprB.signs    ];
+			exprC.termTypes = [exprA.termTypes, exprB.termTypes];
+			exprC.termVars  = [exprA.termVars,  exprB.termVars ];
+			
+			% Ensure we retain the auxiliary equations from both inputs
+			exprC.auxEqs = [ exprA.auxEqs; exprB.auxEqs ];
+			
+		end
+		function exprA = uminus(exprA)
+			assert(isscalar(exprA),'Arithmetic is only supported on scalar Expressions');
+			
+			% Flip the signs
+			exprA.signs = -exprA.signs;
+			
 		end
 		function exprC = minus(exprA,B)
-			% If this function was invoked, then A is an expression
-			if isa(B,'Expression')
-				% Defer to the uminus and plus implementations
-				exprC = exprA + (-B);
-			elseif isa(B,'Variable')
-				exprC = exprA; % build off exprA
-				exprC.varList_M = [ exprC.varList_M, B ]; % add to the minus() list
+			
+			% We'll entirely defer to uminus() and plus()
+			exprC = exprA + (-B);
+			
+		end
+		function exprC = times(exprA,B)
+			assert(isscalar(exprA),'Arithmetic is only supported on scalar Expressions');
+			
+			% We'll cast the second input to an expression so this
+			% implementation can be a bit more uniform
+			if isa(B,'Variable')
+				% Cast B to an expression
+				exprB = Expression.fromVariable( B );
+			elseif isa(B,'Expression')
+				exprB = B;
 			else
 				error('Unexpected operation with unknown type')
 			end
-		end
-		function exprB = uminus(exprA)
-			% Swap the signs
-			exprB = Expression();
-			exprB.varList_P        = exprA.varList_M;
-			exprB.varList_M        = exprA.varList_P;
-			exprB.varList_P_times  = exprA.varList_M_times;
-			exprB.varList_P_divide = exprA.varList_M_divide;
-			exprB.varList_M_times  = exprA.varList_P_times;
-			exprB.varList_M_divide = exprA.varList_P_divide;
-			% Ensure we retain carry the auxiliary equations
-			exprB.auxEqs = exprA.auxEqs;
-		end
-		function exprC = times(exprA,B)
-			assert( isa(B,'Variable'),'Expressions are only supported for multiplication with a single variable')
-			varB = B; % relabel
+			% Both A and B are now expressions
 			
-			% We're going to handle the terms like so
-			%   (a + b*c + d/e) * f = a*f + [b*c]*f + [d*f]/e
-			% (note the signs can be flipped in the obvious way)
-			% 
-			% The square brackets [] represent quantities replaced with an
-			% auxiliary variable, so that the expressions remain locally
-			% simple and of the form that this framework supports.
-			% This choice of *which* things we abstract off with aux
-			% variables extends nicely to keeping the division operation as
-			% the outer-most operation of the multiplication and division.
-			% This leaves the integer-division constraints as conservative
-			% as possible.
+			% In keeping with the note above regarding integer division
+			% preceding normal order of operations (which only implicitly
+			% matters here for multiplication), we'll replace non-signleton
+			% expressions with an auxiliary variable to stand in their
+			% place. This is effectively an alternative to distributing the
+			% multiplication.
 			
-% TODO: There may be cases where we don't want to distribute an
-% expression... e.g. when representing (3+7)/10 --> 3/10 is not valid, nor
-% is 7/10, but if the parentheses are respected then the eq is valid...
+			% We'll replace anything "complex" with an auxiliary variable.
+			% This means if we have more than one term, or anything more
+			% complex than a no-op term. The simplify() function returns
+			% the original expression if it was already simple.
+			exprA = exprA.simplify();
+			exprB = exprB.simplify();
 			
+			% Ensure that these expressions are ready for use... If
+			% the request for this operation was weird, then these
+			% expressions may still be empty. Instead of treating them as
+			% zeros (i.e. no terms), I'll throw an error until it's
+			% meaningful...
+			assert( exprA.numTerms>0 && exprB.numTerms>0, 'Something odd happened. An argument of this binary operator yielded an empty expression...' );
+			
+			% Past this point, we are confident that both expressions have
+			% exactly one no-op term, and a sign. Combining this is simple
+			% now, tailored to multiplication
 			exprC = Expression();
-			% Copy any existing auxiliary equations
-			exprC.auxEqs = exprA.auxEqs;
+			exprC.signs(1) = exprA.signs(1) * exprB.signs(1); % signs multiply
+			exprC.termTypes(1) = 2; % indicates multiplication
+			exprC.termVars{1,1} = exprA.termVars{1,1};
+			exprC.termVars{2,1} = exprB.termVars{1,1};
 			
-			% Sweep through the contents of exprA
-			[FIs,LIs] = exprA.lookup( 1:exprA.numTerms );
-			for k = 1:numel(FIs)
-				vars = exprA.(exprA.fields{FIs(k)})(:,LIs(k));
-				
-				% Prepare an auxiliary variable and equation if relevant
-				if ismember( FIs(k), [3,4,5,6] )
-					
-					% The new equation will be of the form
-					%    -auxVar + U*V = 0
-					% where U,V are variables.
-					U = vars(1); % For both mult and div cases, this is true
-					switch FIs(k)
-						case {3,5} % original term was multipliction
-							V = vars(2);
-						case {4,6} % original term was division
-							V = varB;
-					end
-					
-					% Construct the auxiliary variable
-					naivePossibleValues = U.possibleValues * V.possibleValues;
-					auxVar = Variable.auxVarCreationHelper(naivePossibleValues);
-					% Prepare the auxiliar expression it will be used in
-					auxExpr = Expression();
-					auxExpr.varList_M(1) = auxVar;
-					auxExpr.varList_P_times(:,1) = [U;V]; % new eq is always multiplication
-					% Create the equation representing auxExpr = 0
-					exprC = constructAndRecordAuxEq(exprC,auxExpr); % no parent label now, defer to later
-					
-				end
-				switch FIs(k)
-					case 1 % varList_P
-						exprC = exprC + (vars(1)*varB);
-					case 2 % varList_M
-						exprC = exprC - (vars(1)*varB);
-					case 3 % varList_P_times
-						exprC = exprC + (auxVar*varB);
-					case 4 % varList_P_divide
-						exprC = exprC + (auxVar/vars(2));
-					case 5 % varList_M_times
-						exprC = exprC - (auxVar*varB);
-					case 6 % varList_M_divide
-						exprC = exprC - (auxVar/vars(2));
-					otherwise
-						error('Unsupported case');
-				end
-			end
+			% Retain auxiliary equations from constituents
+			exprC.auxEqs = [ exprA.auxEqs; exprB.auxEqs ];
 			
 		end
 		function exprC = rdivide(exprA,B)
 			
 			% This code is almost identical to times(). I've stripped out
-			% all the comments from that implementation. All ways that this
-			% differs from that are called out with comments.
+			% all the comments from that implementation, and have
+			% highlighted the modifications with the new comments herein.
 			
-			assert( isa(B,'Variable'),'Expressions are only supported for multiplication with a single variable')
-			varB = B;
+			assert(isscalar(exprA),'Arithmetic is only supported on scalar Expressions');
 			
-			% The behavior relevant to division is
-			%   (a + b*c + d/e) / f = a/f + [b*c]/f + d/[e*f]
-			
-			exprC = Expression();
-			exprC.auxEqs = exprA.auxEqs;
-			
-			[FIs,LIs] = exprA.lookup( 1:exprA.numTerms );
-			for k = 1:numel(FIs)
-				vars = exprA.(exprA.fields{FIs(k)})(:,LIs(k));
-				
-				if ismember( FIs(k), [3,4,5,6] )
-					
-					% U definition moved into switch block
-					switch FIs(k)
-						case {3,5} % STILL multipliction
-							U = vars(1); % new
-							V = vars(2); % new
-						case {4,6} % STILL division
-							U = vars(2); % new
-							V = varB;
-					end
-					
-					naivePossibleValues = U.possibleValues * V.possibleValues;
-					auxVar = Variable.auxVarCreationHelper(naivePossibleValues);
-					
-					auxExpr = Expression();
-					auxExpr.varList_M(1) = auxVar;
-					auxExpr.varList_P_times(:,1) = [U;V];
-					
-					exprC = constructAndRecordAuxEq(exprC,auxExpr);
-					
-				end
-				switch FIs(k)
-					case 1 % STILL varList_P
-						exprC = exprC + (vars(1)/varB); % new
-					case 2 % STILL varList_M
-						exprC = exprC - (vars(1)/varB); % new
-					case 3 % STILL varList_P_times
-						exprC = exprC + (auxVar/varB); % new
-					case 4 % STILL varList_P_divide
-						exprC = exprC + (vars(1)/auxVar); % new
-					case 5 % STILL varList_M_times
-						exprC = exprC - (auxVar/varB); % new
-					case 6 % STILL varList_M_divide
-						exprC = exprC - (vars(1)/auxVar); % new
-					otherwise
-						error('Unsupported case');
-				end
+			if isa(B,'Variable')
+				exprB = Expression.fromVariable( B );
+			elseif isa(B,'Expression')
+				exprB = B;
+			else
+				error('Unexpected operation with unknown type')
 			end
+			
+			exprA = exprA.simplify();
+			exprB = exprB.simplify();
+			
+			assert( exprA.numTerms>0 && exprB.numTerms>0, 'Something odd happened. An argument of this binary operator yielded an empty expression...' );
+			
+			% Combining this is simple now, tailored to division
+			exprC = Expression();
+			exprC.signs(1) = exprA.signs(1) / exprB.signs(1); % signs divide (moot point)
+			exprC.termTypes(1) = 3; % indicates division
+			exprC.termVars{1,1} = exprA.termVars{1,1};
+			exprC.termVars{2,1} = exprB.termVars{1,1};
+			
+			exprC.auxEqs = [ exprA.auxEqs; exprB.auxEqs ];
+			
 		end
-		function exprC = ldivide(~,~) %#ok<STOUT>
-			error('Left division of an expression is not supported (it means you''re dividing by something complicated...)');
+		function exprC = ldivide(exprA,B)
+			% A\B is the same as B/A. Defer to that implementation
+			exprC = rdivide(B,exprA);
 		end
 		function exprC = mtimes(exprA,B)
 			% Defer to the non-matrix operation
@@ -213,11 +176,15 @@ classdef Expression
 			% Try to form an equation
 			eqC = Equation(exprA,B);
 		end
-		
 		function disp(expr)
 			fprintf('  Expression: %s\n', expr.toString());
 		end
-		
+	end
+	% * * * * * * * * * OVERLOADED OPERATORS/FUNCTIONS * * * * * * * * * *
+	
+	
+	% * * * * * * * * * * * * HELPER FUNCTIONS * *  * * * * * * * * * * * *
+	methods (Access = public)
 		function str = toString(expr)
 			
 			numTerms_ = expr.numTerms;
@@ -225,65 +192,46 @@ classdef Expression
 			if numTerms_ == 0
 				str = '0';
 			else % at least one term
-				termIndices = 1:numTerms_;
-				[fieldInds,LIs] = expr.lookup(termIndices);
-				
-				for k = termIndices
-					
-					isFirst = k==1;
-					
-					field_ = expr.fields{fieldInds(k)};
-					LI = LIs(k);
-					
-					switch field_
-						case 'varList_P'
-							substr = expr.varList_P(LI).label;
-							isNegative = false;
-						case 'varList_M'
-							substr = expr.varList_M(LI).label; % omit sign
-							isNegative = true;
-						case 'varList_P_times'
+				% The initialization of `str` is performed at the end of
+				% the first loop.
+				for k = 1:numTerms_
+					switch expr.termTypes(k)
+						case 1 % no-op
+							substr = expr.termVars{1,k}.label;
+						case 2 % multiplication
 							substr = [...
-								expr.varList_P_times(1,LI).label,...
+								expr.termVars{1,k}.label,...
 								'*',...
-								expr.varList_P_times(2,LI).label...
+								expr.termVars{2,k}.label...
 							];
-							isNegative = false;
-						case 'varList_P_divide'
+						case 3 % division
 							substr = [...
-								expr.varList_P_divide(1,LI).label,...
+								expr.termVars{1,k}.label,...
 								'/',...
-								expr.varList_P_divide(2,LI).label...
+								expr.termVars{2,k}.label...
 							];
-							isNegative = false;
-						case 'varList_M_times'
-							substr = [...
-								expr.varList_M_times(1,LI).label,...
-								'*',...
-								expr.varList_M_times(2,LI).label...
-							];
-							isNegative = true;
-						case 'varList_M_divide'
-							substr = [...
-								expr.varList_M_divide(1,LI).label,...
-								'/',...
-								expr.varList_M_divide(2,LI).label...
-							];
-							isNegative = true;
 						otherwise
-							error('unsupported field')
+							error('Unexpected term type')
 					end
-					% substr will omit the sign
 					
-					if isFirst && isNegative
-						str = ['-',substr];
-					elseif isFirst % & positive
-						str = substr;
+					if k == 1 % is first
+						switch expr.signs(k)
+							case +1
+								str = substr; % no preface
+							case -1
+								str = ['-',substr]; % compact minus sign (implied unitary)
+							otherwise
+								error('Unexpected sign')
+						end
 					else % not first
-						if isNegative
-							sgn = ' - ';
-						else
-							sgn = ' + ';
+						% Sign character can be more spaced out
+						switch expr.signs(k)
+							case +1
+								sgn = ' + ';
+							case -1
+								sgn = ' - ';
+							otherwise
+								error('Unexpected sign')
 						end
 						str = [ str, sgn, substr ]; %#ok<AGROW>
 					end
@@ -291,240 +239,134 @@ classdef Expression
 				
 			end
 		end
-	end
-	
-	
-	properties (Constant)
-		fields = {
-			'varList_P';
-			'varList_M';
-			'varList_P_times';
-			'varList_P_divide';
-			'varList_M_times';
-			'varList_M_divide';
-		};
-	end
-	properties (GetAccess = public, SetAccess = private, Dependent)
-		numTerms;
-		numTermsByType; % see fields for ordering
-	end
-	methods % getter
-		function numTermsByType_ = get.numTermsByType(expr)
-			numTermsByType_ = nan(size(expr.fields));
-			for fInd = 1:numel(expr.fields)
-				numTermsByType_(fInd) = size(expr.(expr.fields{fInd}),2);
-			end
-		end
-		function numTerms_ = get.numTerms(expr)
-			numTerms_ = sum( expr.numTermsByType );
-		end
-	end
-	methods
-		% This helps indexing the terms in the expression. These won't
-		% necessarily be ordered by their creation order, but will allow
-		% more programmatic interaction with the various terms
-		function [fieldInd,localInd] = lookup(expr,termIndex)
-			termIndex = Expression.booleanCheck(termIndex);
-			% Construct the maps
-			sizes = expr.numTermsByType;
-			fieldIndMapping = repelem( 1:numel(expr.fields), sizes.' );
-			localIndLists = arrayfun( @(sz) {1:sz}, sizes(:).' );
-			localIndMapping = cat(2, localIndLists{:} );
+		function sets = getPossibleValues(expr,termIndices)
 			
-			% Evaluate the maps on the requested indices
-			fieldInd = fieldIndMapping(termIndex);
-			localInd = localIndMapping(termIndex);
-		end
-		function set = getPossibilities(expr,termIndex)
-			termIndex = Expression.booleanCheck(termIndex);
-			
-			if ~isscalar(termIndex)
-				% Recur to make this implementation a bit cleaner
-				set = repmat( SetOfIntegers(), size(termIndex) );
-				for k = 1:numel(termIndex)
-					set(k) = expr.getPossibilities(termIndex(k));
+			% If the indices weren't provided, combine all the terms
+			% together and return that instead
+			if ~exist('termIndices','var')
+				% Ask for all terms, separately
+				termIndices = 1:expr.numTerms;
+				termResolvedSets = expr.getPossibleValues(termIndices);
+				% Add the terms together
+				sets = SetOfIntegers.makeConstant(0);
+				for k = 1:expr.numTerms
+					sets(1) = sets(1) + termResolvedSets(k);
 				end
 				return
 			end
-			% else continue and generate a scalar
 			
-			[fieldInd,LI] = expr.lookup(termIndex);
-			field_ = expr.fields{fieldInd};
-			switch field_
-				case 'varList_P'
-					set = expr.varList_P(LI).possibleValues;
-				case 'varList_M'
-					set = -expr.varList_M(LI).possibleValues;
-				case 'varList_P_times'
-					set = expr.varList_P_times(1,LI).possibleValues ...
-						* expr.varList_P_times(2,LI).possibleValues;
-				case 'varList_P_divide'
-					set = expr.varList_P_divide(1,LI).possibleValues ...
-						/ expr.varList_P_divide(2,LI).possibleValues;
-				case 'varList_M_times'
-					set = ...
-						- expr.varList_M_times(1,LI).possibleValues ...
-						* expr.varList_M_times(2,LI).possibleValues;
-				case 'varList_M_divide'
-					set = ...
-						- expr.varList_M_divide(1,LI).possibleValues ...
-						/ expr.varList_M_divide(2,LI).possibleValues;
-				otherwise
-					error('unsupported field')
+			% Now that we know the input argument exists, forcibly cast it
+			% to a list of indices, instead of a boolean array
+			termIndices = Expression.booleanCheck(termIndices);
+			
+			% In the normal flow, we'll loop over the requested terms, and
+			% evaluate their effective possibleValues
+			sets = repmat( SetOfIntegers(), size(termIndices) );
+			for indInd = 1:numel(termIndices)
+				tInd = termIndices(indInd);
+				switch expr.termTypes(tInd)
+					case 1 % no-op
+						preSignSet = expr.termVars{1,tInd}.possibleValues;
+					case 2 % multiplication
+						preSignSet = ...
+							expr.termVars{1,tInd}.possibleValues * ...
+							expr.termVars{2,tInd}.possibleValues;
+					case 3 % division
+						preSignSet = ...
+							expr.termVars{1,tInd}.possibleValues / ...
+							expr.termVars{2,tInd}.possibleValues;
+					otherwise
+						error('unsupported term type')
+				end
+				% Include the effect of sign
+				switch expr.signs(tInd)
+					case +1
+						sets(indInd) =  preSignSet; % as-is
+					case -1
+						sets(indInd) = -preSignSet; % flip sign
+					otherwise
+						error('Unexpected sign');
+				end
 			end
+			
 		end
 		function tf = getTermIsSolved(expr,termIndices)
+			
 			termIndices = Expression.booleanCheck(termIndices);
-			[fieldInds,LIs] = expr.lookup(termIndices);
-			tf = arrayfun( @(fI,LI) all( getIsSolved( expr.(expr.fields{fI})(:,LI) ), 1), fieldInds,LIs );
+			
+			tf = false(size(termIndices));
+			% Loop over each term and check.
+			for indInd = 1:numel(tf)
+				tInd = termIndices(indInd);
+				switch expr.termTypes(tInd)
+					case 1 % no-op
+						% Only one variable. trivial
+						isSolved = getIsSolved( expr.termVars{1,tInd} );
+					case 2 % multiplication
+						% Two variables. Solved if both are solved
+						isSolved = ...
+							getIsSolved( expr.termVars{1,tInd} ) && ...
+							getIsSolved( expr.termVars{2,tInd} );
+					case 3 % division
+						% Like multiplication...
+						v1 = expr.termVars{1,tInd};
+						v2 = expr.termVars{2,tInd};
+						isSolved = getIsSolved( v1 ) && getIsSolved( v2 );
+						% But we have the additional constraint that
+						% integer division is respected
+						if isSolved
+							possibleValues = v1.possibleValues / v2.possibleValues;
+							assert( cardinality(possibleValues) == 1,...
+								'Variable:invalidSolution', ...
+								'Solution does not respect integer divisibilty.' );
+							% If there's no error, then we're good.
+							% proceed.
+						end
+					otherwise
+						error('Unexpect term type');
+				end
+				tf(indInd) = isSolved;
+			end
+			
 		end
 		function expr = deleteTerms(expr,termIndices)
+			
 			termIndices = Expression.booleanCheck(termIndices);
-			[fieldInds,LIs] = expr.lookup(sort(termIndices)); % sort, so we can go in reverse order and preserve index meaning during the removals
 			
-			for k = numel(fieldInds) : -1 : 1 % go in reverse to avoid corrupting index meaning
-				% Remove each entry in turn. Remove the whole column, to
-				% support the multi-variable cases.
-				expr.( expr.fields{fieldInds(k)} )(:,LIs(k)) = [];
-			end
+			expr.signs(     termIndices) = [];
+			expr.termTypes( termIndices) = [];
+			expr.termVars(:,termIndices) = [];
 		end
-		function [expr,changed] = simplifySplit(expr,parentLabel)
+		% This assesses whether calling simplifyTermwise() can actually
+		% lead to a simplified equation. For example, if this expression
+		% represents an equation which was *generated* by simplifyTermwise,
+		% then it can't be made simpler.
+		function tf = canBeSplitAndSimplified(expr)
 			
-			% Make a list of all complex terms
-			quants = expr.numTermsByType;
-			% The first two quants are simple addition/subtraction. All the
-			% rest are complex
-			complexInds = sum(quants(1:2)) + 1 : sum(quants);
-			numTerms_ = numel(complexInds);
-			
-			changed = numTerms_ > 0;
-			if numTerms_ == 0
-				return
-			end
-			
-			% Look up some info on these
-			[FIs,LIs] = expr.lookup(complexInds);
-			
-			% Grab all the variable sets and their range of values
-			varSets = cell(numTerms_,1);
-			for tInd = 1:numTerms_
-				varSets{tInd} = expr.( expr.fields{FIs(tInd)} )(:,LIs(tInd));
-			end
-			naiveValueSets = expr.getPossibilities(complexInds);
-			
-			% Delete all of these terms from this expression
-			expr = expr.deleteTerms(complexInds);
-			% Now that this is done, we can safely mess with term indexing.
-			
-			% Now we're going to make an auxiliary variable, insert it into
-			% the expression, and make a corresponding equation for this
-			% substitution
-			for tInd = 1:numTerms_
-				
-				% Construct the variable and initialize its values with our
-				% naive expectation.
-				auxVar = Variable.auxVarCreationHelper( naiveValueSets(tInd) );
-				
-				% Include this new variable in the current expression
-				switch FIs(tInd)
-					case {3,4} % term was positive
-						expr = expr + auxVar;
-					case {5,6} % term was negative
-						% The calculated possibleValues from above captured
-						% the sign, but for our purposes, we don't want
-						% that
-						auxVar.possibleValues = -auxVar.possibleValues;
-						expr = expr - auxVar;
-					otherwise
-						error('not supported')
-				end
-				
-				% Prepare an expression which can be set to zero to
-				% represent this substitution equation
-				%    -auxVar + <complex term> = 0
-				auxExpr = Expression();
-				auxExpr.varList_M = auxVar;
-				switch FIs(tInd)
-					case {3,5} % multiplication
-						auxExpr.varList_P_times(:,1) = varSets{tInd};
-					case {4,6} % division
-						auxExpr.varList_P_divide(:,1) = varSets{tInd};
-					otherwise
-						error('not supported')
-				end
-				
-				% And finally, create the equation
-				expr = constructAndRecordAuxEq(expr,auxExpr,parentLabel);
-				
-			end
+			% We'll make this implementation tolerant to the possibility
+			% that parts of this equation may have been simplified through
+			% other means (e.g. scalar-value substitution) which would only
+			% lower the number of terms.
+			% A non-simplifyable expression looks like one of (sign
+			% independent):
+			%    complex + simple
+			%    complex
+			%    simple
+			%    0
+			termIsSimple = expr.termTypes == 1;
+			isAlreadySimple = sum(termIsSimple) <= 1 && sum(~termIsSimple) <= 1;
+			tf = ~isAlreadySimple;
 			
 		end
 	end
-	methods
-		function changed = applyConstraint(expr,termIndex,allowedSet)
-			
-			% Look up the relevant content
-			[fieldInd,localInd] = expr.lookup(termIndex);
-			
-			% If the term is subtracted, flip the sign of the allowed
-			% values so we can disregard it in the following processing
-			if ismember( fieldInd, [2,5,6] )
-				allowedSet = -allowedSet;
-			end
-			
-			% Extract the relevant variables (saves a bit of typing below)
-			vars = expr.(expr.fields{fieldInd})(:,localInd);
-			startingCardinality = prod(arrayfun( @(v) cardinality(v.possibleValues), vars ));
-			
-			% Handle each field type separately
-			switch fieldInd
-				case {1,2} % varList_P, varList_M
-					% Only one variable
-					vars(1).possibleValues = intersect( vars(1).possibleValues, allowedSet );
-				case {3,4,5,6} % varList_P_times, varList_M_times, varList_P_divide, varList_M_divide
-					% Two variables
-					
-					A = vars(1).possibleValues.expand();
-					B = vars(2).possibleValues.expand();
-					allowedValues = allowedSet.expand();
-					% Determine which combinations of these lists of
-					% numbers are feasible
-					switch fieldInd
-						case {3,5} % multiplication
-							possibilitiesMatrix = A(:) .* B(:).';
-						case {4,6} % multiplication
-							possibilitiesMatrix = A(:) ./ B(:).';
-					end
-					compatibilityMatrix = ismember( possibilitiesMatrix, allowedValues );
-					% This last operation also ensures that the results are
-					% integers, since the allowed values must already be
-					% integers.
-					% Determine if thes variables belong to a common
-					% uniqueness family. If so, enforce their uniqueness.
-					if any(ismember(vars(1).uniqueFamilyIDs,vars(2).uniqueFamilyIDs))
-						compatibilityMatrix = compatibilityMatrix & (A(:) ~= B(:).');
-					end
-					
-					% Downselect the lists of values if there are any
-					% values (on a per-variable basis) that are not
-					% possible
-					newSet1 = SetOfIntegers.makeList( A( any(compatibilityMatrix,2) ) );
-					newSet2 = SetOfIntegers.makeList( B( any(compatibilityMatrix,1) ) );
-					% Assign
-					vars(1).possibleValues = newSet1;
-					vars(2).possibleValues = newSet2;
-				otherwise
-					error('not supported')
-			end
-			
-			% Determine if we changed anything...
-			endingCardinality = prod(arrayfun( @(v) cardinality(v.possibleValues), vars ));
-			changed = false;
-			if startingCardinality > endingCardinality
-				fprintf('Constrained possibilities by 10^%.2f\n',log10(startingCardinality/endingCardinality));
-				changed = true;
-			end
-			
+	methods (Access = public, Static)
+		function expr = fromVariable(var_)
+			assert(isa(var_,'Variable') && isscalar(var_),'The argument must be a scalar Variable');
+			expr = Expression();
+			expr.signs(1) = +1;
+			expr.termTypes(1) = 1; % simple, no-op
+			expr.termVars(:,1) = {[]}; % fill with empty
+			expr.termVars{1,1} = var_;
 		end
 	end
 	methods (Access = private, Static)
@@ -537,6 +379,7 @@ classdef Expression
 		end
 	end
 	methods (Access = private)
+		% Creates an auxiliary equation representing auxExpr == 0
 		function expr = constructAndRecordAuxEq(expr,auxExpr,parentLabel)
 			
 			if exist('parentLabel','var')
@@ -546,10 +389,193 @@ classdef Expression
 				eqLabel = '?'; % defer meaningful setting to later
 			end
 			auxEq = Equation(auxExpr,0,eqLabel);
-			% The new equation will be gathered by the static/global
-			% Equation behavior. We'll also record a copy on the
-			% expression itself
+			% Record a copy of the new equation on the expression
 			expr.auxEqs(end+1,:) = auxEq;
+			
 		end
 	end
+	% * * * * * * * * * * * * HELPER FUNCTIONS * *  * * * * * * * * * * * *
+	
+	
+	% * * * * * * * * * * * EXPRESSION MANIPULATION  * * * * * * * * * * *
+	methods (Access = public)
+		% This simplifies a "complex" expression into a simple expression.
+		% "Complex" expressions are those having more than one term, or
+		% having any term which is more complicated than a no-op term.
+		% Simple expressions, therefore, are expressions containing at most
+		% 1 no-op term (any sign) and no other terms.
+		function exprS = simplify(exprC) % Complex -> Simple
+			
+			% Determine whether this expression qualifies as being
+			% "complex"
+			isComplex = numel(exprC.termTypes)>1 || any(exprC.termTypes~=1);
+			% Terminate early if not complex
+			if ~isComplex
+				exprS = exprC;
+				return
+			end
+			
+			% We achieve the simplification by creating an auxiliary
+			% variable (and corresponding equation) to stand-in
+			
+			% We need a set of values to assign to the auxiliary variable,
+			% as a starting point.
+			naivePossibleValues = exprC.getPossibleValues(); % no extra inputs -> possible values of the entire expression, not term by term
+			
+			% Create the auxiliary variable
+			auxVar = Variable.auxVarCreationHelper(naivePossibleValues);
+			% The new simplified expression is now just this auxiliary
+			% variable
+			exprS = Expression.fromVariable( auxVar );
+			% Make sure we retain pre-existing auxiliary equations
+			exprS.auxEqs = exprC.auxEqs;
+			
+			% Prepare the auxiliary equation it will be formally defined by
+			auxExpr = exprC - auxVar; % == 0
+			exprS = exprS.constructAndRecordAuxEq( auxExpr ); % no parent label now, defer to later
+			
+		end
+		% This does a similar operation as simplify(), but termwise. This
+		% swaps out complex *terms*, which is any term which is not a no-op
+		% term.
+		function [expr,changed] = simplifyTermwise(expr,parentLabel)
+			
+			changed = false;
+			
+			% We're going to loop over each term and swap it out if needed.
+			% This will keep the major structure of this expression intact
+			for k = 1:expr.numTerms
+				
+				% Determine if this term is complex
+				if expr.termTypes(k) == 1
+					continue
+				end
+				% Term is complex
+				
+				% We need a set of values to assign to the auxiliary
+				% variable, as a starting point.
+				naivePossibleValues = expr.getPossibleValues(k); % look up only the term we're working on now
+				% getPossibleValues() returns something that accounts for
+				% the sign of the term. Since we're trying to substitute
+				% out just that term, we don't want to retain the sign.
+				% Cancel it off.
+				switch expr.signs(k)
+					case +1
+						% Do nothing
+					case -1
+						naivePossibleValues = -naivePossibleValues; % flip sign
+					otherwise
+						error('Unexpected sign value');
+				end
+				
+				% Create the auxiliary variable
+				auxVar = Variable.auxVarCreationHelper(naivePossibleValues);
+				
+				
+				% Make a new expression that will form the auxiliary
+				% equation
+				%    +existing term - auxVar == 0
+				auxExpr = Expression();
+				% Incorporate complex, existing term
+				auxExpr.signs(1) = +1; % don't carry sign, so we can match the form of this aux equation
+				auxExpr.termTypes(1)  = expr.termTypes(k); % copy current term
+				auxExpr.termVars(:,1) = expr.termVars(:,k); % copy current term
+				% Incorporate aux variable
+				auxExpr.signs(2) = -1; % matching form of aux equation
+				auxExpr.termTypes(2)  = 1; % simple, no-op
+				auxExpr.termVars(:,2) = {[]}; % fill most rows with empty
+				auxExpr.termVars{1,2} = auxVar; % overwrite first row with aux var
+				
+				% Prepare the auxiliary equation it will be formally defined by
+				expr = expr.constructAndRecordAuxEq( auxExpr, parentLabel );
+				
+				
+				% Substitute in this new auxiliary variable. The sign is
+				% not part of the auxVar.
+				expr.termTypes(k) = 1; % no-op
+				expr.termVars(:,k) = {[]}; % empty existing
+				expr.termVars{1,k} = auxVar; % insert simple, no-op term
+				
+				changed = true;
+				
+			end
+			
+		end
+		function changed = applyConstraint(expr,termIndex,allowedSet)
+			
+			% We'll account for the sign of the term in question now, and
+			% get to disregard it for the rest of the function
+			switch expr.signs(termIndex)
+				case +1
+					% Do nothing
+				case -1
+					allowedSet = -allowedSet; % Flip the sign of the allowed set
+				otherwise
+					error('Unexpected sign value');
+			end
+			
+			% For some bookkeeping and progress reporting, we'll record the
+			% starting cardinality, so we can compare our ending state
+			% later
+			startingCardinality = cardinality( expr.getPossibleValues(termIndex) );
+			
+			% Extract the relevant variables (saves a bit of typing below)
+			% (still a cell array).
+			varC = expr.termVars(:,termIndex);
+			% Tailor how we apply this to the type of operating being
+			% represented
+			switch expr.termTypes(termIndex)
+				case 1 % no-op
+					% Only one variable. Just confine what's already there
+					varC{1}.possibleValues = intersect( varC{1}.possibleValues, allowedSet );
+				case {2,3} % multiplication or division
+					% Two variables
+					
+					% Map to actual lists of numbers
+					A = varC{1}.possibleValues.expand();
+					B = varC{2}.possibleValues.expand();
+					allowedValues = allowedSet.expand();
+					
+					% Determine which combinations of these lists of
+					% numbers are feasible
+					switch expr.termTypes(termIndex)
+						case 2 % multiplication
+							possibilitiesMatrix = A(:) .* B(:).';
+						case 3 % division
+							possibilitiesMatrix = A(:) ./ B(:).';
+					end
+					compatibilityMatrix = ismember( possibilitiesMatrix, allowedValues );
+					% This last operation also ensures that the results are
+					% integers, since the allowed values must already be
+					% integers.
+					% If these variables are related through a uniqueness
+					% constraint, and if so, enforce it.
+					if UniquenessManager.areRelated(varC{2},varC{2})
+						compatibilityMatrix = compatibilityMatrix & (A(:) ~= B(:).');
+					end
+					
+					% Downselect the lists of values if there are any
+					% values (on a per-variable basis) that are not
+					% possible
+					newSet1 = SetOfIntegers.makeList( A( any(compatibilityMatrix,2) ) );
+					newSet2 = SetOfIntegers.makeList( B( any(compatibilityMatrix,1) ) );
+					% Assign
+					varC{1}.possibleValues = newSet1;
+					varC{2}.possibleValues = newSet2;
+					
+				otherwise
+					error('Unexpected term type')
+			end
+			
+			% Determine if we changed anything...
+			endingCardinality = cardinality( expr.getPossibleValues(termIndex) );
+			changed = startingCardinality > endingCardinality;
+			if changed
+				fprintf('Constrained possibilities by 10^%.2f\n',log10(startingCardinality/endingCardinality));
+			end
+			
+		end
+	end
+	% * * * * * * * * * * * EXPRESSION MANIPULATION  * * * * * * * * * * *
+	
 end

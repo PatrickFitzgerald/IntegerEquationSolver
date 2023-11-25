@@ -78,6 +78,9 @@ classdef UniquenessManager
 				
 			end
 		end
+		function tf = areRelated(var1,var2)
+			tf = any(ismember(var1.uniqueFamilyIDs,var2.uniqueFamilyIDs));
+		end
 	end
 	methods (Static, Access = private)
 		function varargout = generalVariableStorage(mode,varargin)

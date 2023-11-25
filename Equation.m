@@ -46,16 +46,15 @@ classdef Equation < handle
 			
 			% Try to simplify the equation. Only perform this if we're not
 			% working with an auxiliary equation already
-			quants = eq_.LHS.numTermsByType;
-			if sum(quants(3:end)) > 0 && sum(quants) > 2 % require complexity (3:end) and nontriviality (more than 2 terms)
+			if eq_.LHS.canBeSplitAndSimplified()
 				% This will simplify the equation by fracturing it into
 				% separate equations. This allows us to place more specific
 				% constraints on these 
-				[LHS_,changed] = eq_.LHS.simplifySplit(eq_.label);
+				[LHS_,changed] = eq_.LHS.simplifyTermwise(eq_.label);
 				% If anything happened, apply it and announce it.
 				if changed
 					eq_.LHS = LHS_;
-					fprintf('<SUB> %s\n',eq_.toString);
+					fprintf('<SUB> %s\n',eq_.toString());
 				end
 			end
 			
@@ -91,7 +90,7 @@ classdef Equation < handle
 			% Get a list of values
 			numTerms = eq_.LHS.numTerms;
 			allTerms = 1:numTerms;
-			valueSets = eq_.LHS.getPossibilities( allTerms );
+			valueSets = eq_.LHS.getPossibleValues( allTerms );
 			
 			for omitInd = numTerms : -1 : 1 % the more complex ones (later) will be more fruitful
 				RHS_ = eq_.RHS;
@@ -120,7 +119,7 @@ classdef Equation < handle
 			allTerms = 1:numTerms;
 			isSolvedVec = eq_.LHS.getTermIsSolved( allTerms );
 			% Extract their values
-			valueSets = eq_.LHS.getPossibilities( isSolvedVec );
+			valueSets = eq_.LHS.getPossibleValues( isSolvedVec );
 			% Remove those terms, since we'll be accounting for them
 			% ourselves
 			eq_.LHS = eq_.LHS.deleteTerms( isSolvedVec );

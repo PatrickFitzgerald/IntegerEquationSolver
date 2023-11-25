@@ -19,68 +19,48 @@ classdef Variable < handle
 			assert( cardinality(pV)>0,...
 				'Variable:invalidSolution',...
 				'Attempted to lock in an invalid solution');
+			
 			var_.possibleValues = pV;
 		end
 	end
 	
-	methods
+	methods (Access = public)
+		% If these functions/operators were invoked, then we are confident
+		% the first arument is a "Variable" because of matlab's dispatching
+		% mechanisms. No type checking necessary
 		function exprC = plus(varA,B)
-			% If this function was invoked, then A is a variable
-			if isa(B,'Variable')
-				% We'll represent A as an expression, and then defer to the
-				% Expression's implementation
-				exprA = Expression();
-				exprA.varList_P = varA;
-				exprC = exprA + B; % This is the real operation
-			elseif isa(B,'Expression')
-				% We can defer to the Expression's implementation and just
-				% re-order these operands
-				exprC = B + varA;
-			else
-				error('Unexpected operation with unknown type')
-			end
+			assert(isscalar(varA),'Arithmetic is only supported on scalar Variables');
+			% We'll cast A to an expression and defer to the Expression's
+			% implementation of addition
+			exprA = Expression.fromVariable(varA);
+			exprC = exprA + B;
+		end
+		function exprA = uminus(varA)
+			assert(isscalar(varA),'Arithmetic is only supported on scalar Variables');
+			% We'll cast A to an expression and defer to the Expression's
+			% implementation of unitary minus
+			exprA = -Expression.fromVariable(varA); % negative immediately
 		end
 		function exprC = minus(varA,B)
-			% If this function was invoked, then A is a variable
-			assert( isa(B,'Variable') || isa(B,'Expression'), 'Second argument must be a Variable or an Expression' );
-			
-			% In either case, we'll convert A to an expression and defer to
-			% the Expression's implementation of minus()
-			exprA = Expression();
-			exprA.varList_P = varA;
-			exprC = exprA - B; % This is the real operation
+			assert(isscalar(varA),'Arithmetic is only supported on scalar Variables');
+			% We'll cast A to an expression and defer to the Expression's
+			% implementation of subtraction
+			exprA = Expression.fromVariable(varA);
+			exprC = exprA - B;
 		end
 		function exprC = times(varA,B)
-			% If this function was invoked, then A is a variable
-			if isa(B,'Variable')
-				% Create the expression representing the product of two
-				% variables
-				exprC = Expression();
-				exprC.varList_P_times = [varA;B];
-			elseif isa(B,'Expression')
-				error('Multiplying a Variable and an Expression is not supported');
-			else
-				error('Unexpected operation with unknown type')
-			end
+			assert(isscalar(varA),'Arithmetic is only supported on scalar Variables');
+			% We'll cast A to an expression and defer to the Expression's
+			% implementation of multiplication
+			exprA = Expression.fromVariable(varA);
+			exprC = exprA * B;
 		end
 		function exprC = rdivide(varA,B) % normal division
-			% If this function was invoked, then A is a variable
-			if isa(B,'Variable')
-				% Create the expression representing the division of two
-				% variables
-				exprC = Expression();
-				exprC.varList_P_divide = [varA;B]; % normal division -> normal order
-				
-				% Since these variables have been divided, there's an
-				% implicit constraint that the division yields an integer
-				
-				
-				
-			elseif isa(B,'Expression')
-				error('Dividing a Variable by an Expression is not supported');
-			else
-				error('Unexpected operation with unknown type')
-			end
+			assert(isscalar(varA),'Arithmetic is only supported on scalar Variables');
+			% We'll cast A to an expression and defer to the Expression's
+			% implementation of multiplication
+			exprA = Expression.fromVariable(varA);
+			exprC = exprA / B;
 		end
 		function exprC = ldivide(varA,B)
 			% Just swap the order
@@ -102,18 +82,18 @@ classdef Variable < handle
 			% Try to form an equation
 			eqC = Equation(varA,B);
 		end
-		function disp(var)
+		function disp(vars)
 			xSymbol = char(215);
-			temp = compose(['%u',xSymbol], size(var));
+			temp = compose(['%u',xSymbol], size(vars));
 			sizeStr = cat(2,'', temp{:} );
 			sizeStr(end) = [];
 			
 			fprintf( '  %s Variables\n', sizeStr );
-			for k = 1:numel(var)
-				if var(k).getIsSolved()
-					fprintf( '    %s = %d\n', var(k).label, var(k).possibleValues.ranges(1,1) );
+			for k = 1:numel(vars)
+				if vars(k).getIsSolved()
+					fprintf( '    %s = %d\n', vars(k).label, vars(k).possibleValues.ranges(1,1) );
 				else
-					fprintf( '    %s could be any of %s\n', var(k).label, var(k).possibleValues.toString() );
+					fprintf( '    %s could be any of %s\n', vars(k).label, vars(k).possibleValues.toString() );
 				end
 			end
 			fprintf('\n');
