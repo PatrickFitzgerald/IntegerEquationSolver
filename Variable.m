@@ -5,6 +5,10 @@ classdef Variable < handle
 		possibleValues (1,1)      = SetOfIntegers(); % empty by default
 	end
 	methods % Setters
+		function set.label(var_,label_)
+			assert( ~Variable.getIsLocked(), 'Unexpected control flow, should not be making structural changes after state locking...' );
+			var_.label = label_;
+		end
 		function set.possibleValues(var_,pV)
 			
 			% If the input is numeric instead of a set of integers, cast it
@@ -62,6 +66,9 @@ classdef Variable < handle
 			% Reshape
 			vars = reshape(temp,sz);
 			
+			% Record these objects
+			Variable.recordGeneralVar(vars);
+			
 		end
 	end
 	% * * * * * * * * * * * * * * * CONSTRUCTOR * * * * * * * * * * * * * *
@@ -70,6 +77,12 @@ classdef Variable < handle
 	% * * * * * * * * * * * * UNIQUENESS INFO STORAGE * * * * * * * * * * *
 	properties (GetAccess = ?UniquenessManager, SetAccess = ?UniquenessManager)
 		uniqueFamilyIDs (1,:) uint16 = uint16.empty(1,0); % One entry for each uniqueness group that this variable belongs to
+	end
+	methods % Setters
+		function set.uniqueFamilyIDs(var_,familyIDs)
+			assert( ~Variable.getIsLocked(), 'Unexpected control flow, should not be making structural changes after state locking...' );
+			var_.uniqueFamilyIDs = familyIDs;
+		end
 	end
 	% * * * * * * * * * * * * UNIQUENESS INFO STORAGE * * * * * * * * * * *
 	
@@ -153,7 +166,7 @@ classdef Variable < handle
 	% * * * * * * * * * OVERLOADED OPERATORS/FUNCTIONS * * * * * * * * * *
 	
 	
-	% * * * * * * * * * * * * HELPER FUNCTIONS * *  * * * * * * * * * * * *
+	% * * * * * * * * * * * * HELPER FUNCTIONS * * * * * * * * * * * * * *
 	methods (Access = public)
 		function tf = getIsSolved(vars)
 			% Support array of variables
@@ -176,14 +189,40 @@ classdef Variable < handle
 			Variable.recordAuxVar(auxVar);
 		end
 	end
-	% * * * * * * * * * * * * HELPER FUNCTIONS * *  * * * * * * * * * * * *
+	% * * * * * * * * * * * * HELPER FUNCTIONS * * * * * * * * * * * * * *
 	
 	
-	
+	% * * * * * * * * * STATIC CLASS-WIDE MANAGEMENT * * * * * * * * * * *
 	methods (Access = public, Static)
+		% General state management
 		function clearGlobal()
 			Variable.generalVariableStorage('clear');
 		end
+		function lockStructure()
+			Variable.generalVariableStorage('lock');
+		end
+		function unlockStructure()
+			Variable.generalVariableStorage('unlock');
+		end
+		function isLocked = getIsLocked()
+			isLocked = Variable.generalVariableStorage('getIsLocked');
+		end
+		function state = exportState()
+			assert( Variable.getIsLocked(), 'The structure needs to be locked before exporting a state -> Variable.lockStructure()');
+			state = Variable.generalVariableStorage('exportState');
+		end
+		function restoreState(state)
+			assert( isa(state,'SolverState'), 'state must be a SolverState instance');
+			assert( Variable.getIsLocked(), 'The structure needs to be locked while restoring a state -> Variable.lockStructure()');
+			Variable.generalVariableStorage('restoreState',state);
+		end
+		
+		% General variable handling (manual or auxiliary variables)
+		function recordGeneralVar(arrayOfVars)
+			Variable.generalVariableStorage('recordGen',arrayOfVars);
+		end
+		
+		% Auxiliary variable handling
 		function ind = getNextAuxIndex()
 			ind = Variable.generalVariableStorage('nextAuxInd');
 		end
@@ -197,10 +236,17 @@ classdef Variable < handle
 	methods (Access = private, Static)
 		function varargout = generalVariableStorage(mode,varargin)
 			
-			persistent auxVarCount auxVarList;
-			if isempty(auxVarCount) || ~isa(auxVarList,'Variable') || strcmp(mode,'clear')
-				auxVarCount = 0;
+			persistent genVarList auxVarList lockID;
+			notYetInit = ...
+				~isa(genVarList,'Variable') || ...
+				~isa(auxVarList,'Variable') || ...
+				isempty(lockID);
+			% If we're not initialized, or we need to reset, re-initialize
+			% the persistent variables.
+			if notYetInit || strcmp(mode,'clear')
+				genVarList = Variable.empty(0,1);
 				auxVarList = Variable.empty(0,1);
+				lockID = nan;
 				fprintf('Variable global settings have been reset\n')
 				% If we were asked to clear, then we can terminate
 				if strcmp(mode,'clear')
@@ -208,19 +254,70 @@ classdef Variable < handle
 				end
 			end
 			
+			% The nan'iness of the lockID informs whether we're locked or
+			% not.
+			isLocked = ~isnan(lockID);
+			
+			% Operations which would alter the structural state of these
+			% parameters are guarded by a check on isLocked.
 			switch mode
+				case 'getIsLocked'
+					varargout{1} = isLocked;
+				case 'lock'
+					% If we're not already locked, we'll choose a new
+					% lockID
+					if ~isLocked
+						sprev = rng('shuffle');
+						lockID = randi(2^32);
+						rng(sprev); % restore rng state
+					end
+				case 'unlock'
+					lockID = nan; % Reset the lockID
+				case 'exportState'
+					% Error checking on lock state has already been done
+					state = SolverState();
+					state.lockID = lockID; % Make a copy of the current lockID, to compare upon importing
+					% Extract all the variable states
+					state.varStates = arrayfun( @(v) v.possibleValues, genVarList );
+					% Return this state instance
+					varargout{1} = state;
+				case 'restoreState'
+					% Verify the lockID still matches. Failure to match
+					% indicates that the structure was unlocked, and thus
+					% may not line up anymore.
+					state = varargin{1};
+					assert( isequal(state.lockID,lockID), 'The structure must have been unlocked and relocked since exporting the state. This is not allowed. Restoring a state must be done during the same period of lockdown as it was exported.' );
+					assert( numel(state.varStates) == numel(genVarList), 'Something went wrong');
+					% Restore the possibleValues of all managed variables
+					for k = 1:numel(genVarList)
+						genVarList(k).possibleValues = state.varStates(k);
+					end
+				
+				case 'recordGen'
+					enforceStateLock(isLocked);
+					varList = varargin{1};
+					N = numel(varList);
+					genVarList(end+1:end+N,1) = varList(:);
+				
 				case 'nextAuxInd'
-					auxVarCount = auxVarCount + 1;
-					varargout{1} = auxVarCount;
+					varargout{1} = numel(auxVarList) + 1;
 				case 'recordAux'
-					auxVarList(end+1,1) = varargin{1};
+					enforceStateLock(isLocked);
+					varList = varargin{1};
+					N = numel(varList);
+					auxVarList(end+1:end+N,1) = varList(:);
 				case 'getAux'
 					varargout = {auxVarList};
+				
 				otherwise
 					error('Invalid usage');
 			end
+			
+			function enforceStateLock(isLocked)
+				assert( ~isLocked, 'Unexpected control flow. Variable has been locked down, and disallows making structural changes' )
+			end
 		end
-		
 	end
+	% * * * * * * * * * STATIC CLASS-WIDE MANAGEMENT * * * * * * * * * * *
 	
 end
