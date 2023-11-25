@@ -67,6 +67,16 @@ classdef Variable < handle
 			vars = reshape(temp,sz);
 			
 			% Record these objects
+			% There seems to be one nuance with the above code that will
+			% end up recording an extra scalar instance of our Variable
+			% class, which is redundant to the first entry in the array
+			% created. To avoid recording this as a distinct variable,
+			% we'll skip the recordGeneralVar() if we recurred into this
+			% constructor.
+			stack = dbstack(1); % omit current scope
+			if ~isempty(stack) && strcmp(stack(1).name,'Variable.Variable') % stack(1) is therefore parent scope
+				return
+			end
 			Variable.recordGeneralVar(vars);
 			
 		end
