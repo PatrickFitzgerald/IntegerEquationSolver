@@ -16,6 +16,8 @@ classdef UniquenessManager
 			% Add this family ID to all the variables
 			for k = 1:numel(arrayOfVariables)
 				arrayOfVariables(k).uniqueFamilyIDs(1,end+1) = familyID;
+				% This will error if it's not a valid to change the
+				% Variable structure at this time.
 			end
 			% Record this list of variables internally
 			UniquenessManager.generalVariableStorage('storeUniqueFamily',familyID,arrayOfVariables(:));
@@ -85,9 +87,8 @@ classdef UniquenessManager
 	methods (Static, Access = private)
 		function varargout = generalVariableStorage(mode,varargin)
 			
-			persistent lastUniqueFamilyID uniqueFamilies;
-			if isempty(lastUniqueFamilyID) || strcmp(mode,'clear')
-				lastUniqueFamilyID = uint16(0);
+			persistent uniqueFamilies;
+			if ~iscell(uniqueFamilies) || strcmp(mode,'clear')
 				uniqueFamilies = cell(0,1);
 				fprintf('UniquenessManager global settings have been reset\n')
 				% If we were asked to clear, then we can terminate
@@ -98,15 +99,13 @@ classdef UniquenessManager
 			
 			switch mode
 				case 'getNextID'
-					varargout = {lastUniqueFamilyID + 1};
+					varargout{1} = numel(uniqueFamilies) + 1;
 				case 'storeUniqueFamily'
 					familyID = varargin{1};
 					varList = varargin{2};
-					assert(lastUniqueFamilyID + 1 == familyID, 'Something went wrong');
+					assert(numel(uniqueFamilies) + 1 == familyID, 'Something went wrong');
 					% Record the family members
 					uniqueFamilies{familyID} = varList;
-					% Increase the last ID used
-					lastUniqueFamilyID = familyID;
 				case 'getAllFamilies'
 					varargout{1} = uniqueFamilies;
 				otherwise
