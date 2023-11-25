@@ -5,6 +5,34 @@ classdef SetOfIntegers % not handle
 		% all rows are disjoint. rows will be sorted for convenience
 	end
 	
+	
+	% * * * * * * * * * * * * * * CONSTRUCTORS * * * * * * * * * * * * * *
+	methods (Access = public, Static)
+		function set = makeConstant(val)
+			assert( mod(val,1)==0, 'Value must be an integer')
+			set = SetOfIntegers();
+			set.ranges = [val,val];
+		end
+		function set = makeRange(lower,upper)
+			assert( mod(lower,1)==0 && mod(upper,1)==0, 'Values must be integers')
+			if lower <= upper
+				set = SetOfIntegers();
+				set.ranges = [lower,upper];
+			else % not valid
+				set = SetOfIntegers(); % empty by default
+			end
+		end
+		function set = makeList(vecOfValues)
+			vecOfValues = vecOfValues(:);
+			assert( all( mod(vecOfValues,1)==0 ), 'Values must be integers')
+			set = SetOfIntegers();
+			set.ranges = SetOfIntegers.simplifyRanges( repmat( vecOfValues, 1,2 ) );
+		end
+	end
+	% * * * * * * * * * * * * * * CONSTRUCTORS * * * * * * * * * * * * * *
+	
+	
+	% * * * * * * * * * OVERLOADED OPERATORS/FUNCTIONS * * * * * * * * * *
 	methods (Access = public)
 		function setC = plus(setA,setB) % assumes no shared variables
 			% There are more efficient ways to combine these, but this is
@@ -57,7 +85,17 @@ classdef SetOfIntegers % not handle
 			% Defer to non-matrix variant
 			setC = ldivide(setA,setB);
 		end
-		
+		function disp(sets)
+			for sInd = 1:numel(sets)
+				fprintf('     Integer set: %s\n',sets(sInd).toString())
+			end
+		end
+	end
+	% * * * * * * * * * OVERLOADED OPERATORS/FUNCTIONS * * * * * * * * * *
+	
+	
+	% * * * * * * * * * * * * HELPER FUNCTIONS * * * * * * * * * * * * * *
+	methods (Access = public)
 		function setB = confine(setA,lower,upper) % confines (inclusive)
 			% We'll confine each simple range independently
 			ranges_ = setA.ranges;
@@ -90,11 +128,6 @@ classdef SetOfIntegers % not handle
 				last = last + quant;
 			end
 		end
-		function disp(set)
-			for sInd = 1:numel(set)
-				fprintf('     Integer set: %s\n',set(sInd).toString())
-			end
-		end
 		function str = toString(set)
 			% This converts the list to a friendly format
 			assert( isscalar(set), 'Can only stringify one set at a time')
@@ -118,26 +151,6 @@ classdef SetOfIntegers % not handle
 		end
 	end
 	methods (Access = public, Static)
-		function set = makeConstant(val)
-			assert( mod(val,1)==0, 'Value must be an integer')
-			set = SetOfIntegers();
-			set.ranges = [val,val];
-		end
-		function set = makeRange(lower,upper)
-			assert( mod(lower,1)==0 && mod(upper,1)==0, 'Values must be integers')
-			if lower <= upper
-				set = SetOfIntegers();
-				set.ranges = [lower,upper];
-			else % not valid
-				set = SetOfIntegers(); % empty by default
-			end
-		end
-		function set = makeList(vecOfValues)
-			vecOfValues = vecOfValues(:);
-			assert( all( mod(vecOfValues,1)==0 ), 'Values must be integers')
-			set = SetOfIntegers();
-			set.ranges = SetOfIntegers.simplifyRanges( repmat( vecOfValues, 1,2 ) );
-		end
 		function setC = setSubtract(setA,setB) % elements of A which appear in B are removed
 			setA_ranges = SetOfIntegers.setComplement(setA.ranges);
 			
@@ -220,5 +233,6 @@ classdef SetOfIntegers % not handle
 			end
 		end
 	end
+	% * * * * * * * * * * * * HELPER FUNCTIONS * * * * * * * * * * * * * *
 	
 end
