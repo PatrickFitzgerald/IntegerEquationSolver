@@ -15,10 +15,8 @@ xsol(1,7)=97;
 xsol([1 3 6 8],8)=[34;33;19;62];
 xsol([3 6],9)=[25;38];
 
-x = repmat( Variable(), 10,10 );
-% Variables are handle type, so I need to recreate them individually
+x = Variable(10,10);
 for k = 1:numel(x)
-	x(k) = Variable();
 	x(k).label = sprintf('x%u',k);
 % 	x(k).label = sprintf('x03%u',k);
 	if ~isnan( xsol(k) )

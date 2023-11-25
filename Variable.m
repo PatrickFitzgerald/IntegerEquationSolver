@@ -1,11 +1,10 @@
 classdef Variable < handle
 	
-	properties
-		label char = '';
-		possibleValues (1,1) = SetOfIntegers(); % empty by default
-		uniqueFamilyIDs (1,:) uint16 = uint16.empty(1,0); % One entry for each uniqueness group that this variable belongs to
+	properties (GetAccess = public, SetAccess = public)
+		label          (1,:) char = '';
+		possibleValues (1,1)      = SetOfIntegers(); % empty by default
 	end
-	methods % setters
+	methods % Setters
 		function set.possibleValues(var_,pV)
 			
 			% If the input is numeric instead of a set of integers, cast it
@@ -24,6 +23,58 @@ classdef Variable < handle
 		end
 	end
 	
+	
+	% * * * * * * * * * * * * * * * CONSTRUCTOR * * * * * * * * * * * * * *
+	methods (Access = public)
+		function vars = Variable(varargin)
+			
+			% Parse the size provided
+			switch numel(varargin)
+				case 0
+					sz = [1,1];
+				case 1
+					sz = varargin{1};
+				otherwise
+					sz = cat(2, varargin{:} );
+			end
+			% I could do more error checking here... but I don't really
+			% care to.
+			
+			assert( isvector(sz) && isnumeric(sz) && all(isfinite(sz)) &&...
+				isreal(sz) && all(mod(sz,1)==0) && all(sz>=0),...
+				'Invalid array size')
+			
+			% Handle empty arrays differently
+			num = prod(sz);
+			if num == 0
+				% If the request was actually empty, just short-circuit on
+				% that and don't record anything
+				vars = Variable.empty(sz);
+				return
+			end
+			
+			% I found some guidance on making arrays of handle objects
+			% https://www.mathworks.com/help/matlab/matlab_oop/creating-object-arrays.html
+			temp(num,1) = vars;
+			% It feels like this shouldn't be enough to sever the objects
+			% into distinct instances, but apparently it is.
+			
+			% Reshape
+			vars = reshape(temp,sz);
+			
+		end
+	end
+	% * * * * * * * * * * * * * * * CONSTRUCTOR * * * * * * * * * * * * * *
+	
+	
+	% * * * * * * * * * * * * UNIQUENESS INFO STORAGE * * * * * * * * * * *
+	properties (GetAccess = ?UniquenessManager, SetAccess = ?UniquenessManager)
+		uniqueFamilyIDs (1,:) uint16 = uint16.empty(1,0); % One entry for each uniqueness group that this variable belongs to
+	end
+	% * * * * * * * * * * * * UNIQUENESS INFO STORAGE * * * * * * * * * * *
+	
+	
+	% * * * * * * * * * OVERLOADED OPERATORS/FUNCTIONS * * * * * * * * * *
 	methods (Access = public)
 		% If these functions/operators were invoked, then we are confident
 		% the first arument is a "Variable" because of matlab's dispatching
@@ -99,17 +150,20 @@ classdef Variable < handle
 			fprintf('\n');
 		end
 	end
+	% * * * * * * * * * OVERLOADED OPERATORS/FUNCTIONS * * * * * * * * * *
 	
-	methods
-		function tf = getIsSolved(var)
+	
+	% * * * * * * * * * * * * HELPER FUNCTIONS * *  * * * * * * * * * * * *
+	methods (Access = public)
+		function tf = getIsSolved(vars)
 			% Support array of variables
-			tf = false(size(var));
-			for k = 1:numel(var)
-				tf(k) = var(k).possibleValues.cardinality() == 1;
+			tf = false(size(vars));
+			for k = 1:numel(vars)
+				tf(k) = vars(k).possibleValues.cardinality() == 1;
 			end
 		end
 	end
-	methods (Static)
+	methods (Access = public, Static)
 		function auxVar = auxVarCreationHelper(initialValueSet)
 			% Construct the variable
 			auxVar = Variable();
@@ -118,12 +172,15 @@ classdef Variable < handle
 			% to. This ensures the possibleValues is set at least
 			% moderately well.
 			auxVar.possibleValues = initialValueSet;
-			% Record this new variable, for goot measure
+			% Record this new variable, for good measure
 			Variable.recordAuxVar(auxVar);
 		end
 	end
+	% * * * * * * * * * * * * HELPER FUNCTIONS * *  * * * * * * * * * * * *
 	
-	methods (Static)
+	
+	
+	methods (Access = public, Static)
 		function clearGlobal()
 			Variable.generalVariableStorage('clear');
 		end
@@ -137,7 +194,7 @@ classdef Variable < handle
 			auxVarList = Variable.generalVariableStorage('getAux');
 		end
 	end
-	methods (Static, Access = private)
+	methods (Access = private, Static)
 		function varargout = generalVariableStorage(mode,varargin)
 			
 			persistent auxVarCount auxVarList;

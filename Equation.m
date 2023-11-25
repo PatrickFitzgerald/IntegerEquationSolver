@@ -1,6 +1,6 @@
 classdef Equation < handle
 	
-	properties
+	properties (GetAccess = public, SetAccess = private)
 		LHS Expression;
 		RHS SetOfIntegers;
 		label = '';
