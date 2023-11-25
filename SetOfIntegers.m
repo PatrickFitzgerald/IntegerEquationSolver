@@ -153,7 +153,7 @@ classdef SetOfIntegers % not handle
 			
 			% Sort the input ranges so we can simplify our work in the
 			% loop. This also lets us reuse this input as working space.
-			ranges = sortrows(ranges);
+			ranges = sortrows_(ranges);
 			
 			% Handle some edge cases
 			if size(ranges,1) <= 1 % size == 0 or 1, already simplified
@@ -181,6 +181,19 @@ classdef SetOfIntegers % not handle
 			% We've added everything. Truncate to what we actually used.
 			ranges = ranges(1:workingRangeInd,:);
 			
+			% This replicates sortrows() without all of its overhead
+			function ranges_ = sortrows_(ranges_)
+				% So that the first column takes precedence, we'll sort by
+				% the second column first, and then the first. sort()
+				% maintains the order of items which are equivalent, so
+				% this will allow us to defer to the second column's
+				% sorting suggestion. This is exactly how sortrows() works.
+				% No novelty on my part.
+				[~,order] = sort( ranges_(:,2) );
+				ranges_ = ranges_(order,:);
+				[~,order] = sort( ranges_(:,1) );
+				ranges_ = ranges_(order,:);
+			end
 		end
 		function ranges_ = setComplement(ranges) % performs setSubtract( [all integers], setA )
 			% Handle the empty set
