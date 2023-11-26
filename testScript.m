@@ -62,15 +62,17 @@ x( 71) + x( 72) - x( 73) - x( 74) - x( 75) - x( 76) * x( 77) - x( 78) - x( 79) +
 x( 81) + x( 82) / x( 83) + x( 84) * x( 85) + x( 86) + x( 87) + x( 88) + x( 89) - x( 90) == 1632;
 x( 91) + x( 92) + x( 93) + x( 94) - x( 95) - x( 96) - x( 97) + x( 98) * x( 99) + x(100) == 1717;
 
-
-refineEqsToConvergence(x);
-% After the first refinement, there should be no new auxiliary variables or
-% equations
+% Now that we've defined all the equations and relationships, we can lock
+% down the structure.
 Variable.lockStructure();
+
 tic()
 state = Variable.exportState();
 Variable.restoreState(state);
 toc()
+
+refineEqsToConvergence(x);
+
 %%
 
 eqList = Equation.getEqList();
