@@ -73,16 +73,61 @@ eqList = assignOrderedLabels(eqList);
 % down the structure.
 Variable.lockStructure();
 
-tic()
+% Do a first pass at refining
+eqList = refineEqsToConvergence(x,eqList);
+% Save this state as a backup
 state = Variable.exportState();
 state.equations = eqList;
 
-% try something crazy
-
-Variable.restoreState(state);
-eqList = state.equations;
+%%
+tic()
+% We're going to try a bunch of things and see if any lead to invalid
+% solutions.
+allVars = Variable.getGenVars();
+for vInd = 1:numel(allVars)
+	var_ = allVars(vInd);
+	
+	possibleValues = var_.possibleValues.expand();
+	isAllowed = true(size(possibleValues));
+	
+	for pvInd = 1:numel(possibleValues)
+		
+		pv = possibleValues(pvInd);
+		var_.possibleValues = pv;
+		
+		try
+			refineEqsToConvergence(x,eqList);
+		catch err
+			switch err.identifier
+				case 'Variable:invalidSolution'
+				case 'Expression:invalidSolution'
+				case 'UniquenessManager:invalidSolution'
+				otherwise
+					rethrow(err);
+			end
+			isAllowed(pvInd) = false;
+		end
+		
+		Variable.restoreState(state);
+		eqList = state.equations;
+		
+	end
+	
+	% If we found anything that was disallowed, we can update our state now
+	if ~all(isAllowed)
+		% Lock in the smaller set
+		var_.possibleValues = possibleValues(isAllowed);
+		% Apply these changes
+		eqList = refineEqsToConvergence(x,eqList);
+		% Save the new state
+		state = Variable.exportState();
+		state.equations = eqList;
+	end
+	
+end
 toc()
 
+%%
 eqList = refineEqsToConvergence(x,eqList);
 
 %%

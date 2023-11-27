@@ -2,7 +2,7 @@ classdef Variable < handle
 	
 	properties (GetAccess = public, SetAccess = public)
 		label          (1,:) char = '';
-		possibleValues (1,1)      = SetOfIntegers(); % empty by default
+		possibleValues            = SetOfIntegers(); % empty by default
 	end
 	methods % Setters
 		function set.label(var_,label_)
@@ -230,6 +230,9 @@ classdef Variable < handle
 		function recordGeneralVar(arrayOfVars)
 			Variable.generalVariableStorage('recordGen',arrayOfVars);
 		end
+		function genVarList = getGenVars()
+			genVarList = Variable.generalVariableStorage('getGen');
+		end
 		
 		% Auxiliary variable handling
 		function ind = getNextAuxIndex()
@@ -307,6 +310,8 @@ classdef Variable < handle
 					varList = varargin{1};
 					N = numel(varList);
 					genVarList(end+1:end+N,1) = varList(:);
+				case 'getGen'
+					varargout = {genVarList};
 				
 				case 'nextAuxInd'
 					varargout{1} = numel(auxVarList) + 1;
