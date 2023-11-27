@@ -19,7 +19,8 @@ classdef Expression % non-handle
 		%   1     vars{1}             no-op
 		%   2     vars{1} * vars{2}   multiplication
 		%   3     vars{1} / vars{2}   division
-		
+	end
+	properties (GetAccess = public, SetAccess = ?Equation)
 		auxEqs (:,1) Equation = Equation.empty(0,1);
 	end
 	properties (GetAccess = public, SetAccess = private, Dependent)
@@ -173,11 +174,42 @@ classdef Expression % non-handle
 			exprC = ldivide(exprA,B);
 		end
 		function eqC = eq(exprA,B)
-			% Try to form an equation
-			eqC = Equation(exprA,B);
+			% Try to form an equation. If it was formed with the ==
+			% operator, then it was made by the user, not as an auxiliary
+			% equation.
+			isAuxiliary = false;
+			eqC = Equation(exprA,B,isAuxiliary);
 		end
-		function disp(expr)
-			fprintf('  Expression: %s\n', expr.toString());
+		function disp(exprs)
+			
+			% Report size
+			sizeStr = createSizeStr(size(exprs));
+			fprintf( '  %s Expression\n', sizeStr );
+			
+			% Report each item, indenting them each, so they are
+			% distinct from the size preface
+			for k = 1:numel(exprs)
+				rawStr = formatScalar(exprs(k));
+				fprintf( '%s', indent(rawStr, '    ' ) );
+			end
+			% And an extra newline for good measure.
+			fprintf('\n');
+			
+			function str = formatScalar(expr)
+				
+				% Extract the description of the expression and its
+				% sub-equations
+				[exprStr,eqsStr] = expr.toString();
+				% Indent the subequations
+				eqsStr = indent(eqsStr,'  ');
+				% If not empty, prepend with a newline
+				if ~isempty(eqsStr)
+					eqsStr = sprintf('\n%s',eqsStr);
+				end
+				% Print to screen
+				str = sprintf('Expression: %s%s\n', exprStr, eqsStr );
+				
+			end
 		end
 	end
 	% * * * * * * * * * OVERLOADED OPERATORS/FUNCTIONS * * * * * * * * * *
@@ -185,12 +217,12 @@ classdef Expression % non-handle
 	
 	% * * * * * * * * * * * * HELPER FUNCTIONS * *  * * * * * * * * * * * *
 	methods (Access = public)
-		function str = toString(expr)
+		function [exprStr,eqsStr] = toString(expr)
 			
 			numTerms_ = expr.numTerms;
 			
 			if numTerms_ == 0
-				str = '0';
+				exprStr = '0';
 			else % at least one term
 				% The initialization of `str` is performed at the end of
 				% the first loop.
@@ -217,9 +249,9 @@ classdef Expression % non-handle
 					if k == 1 % is first
 						switch expr.signs(k)
 							case +1
-								str = substr; % no preface
+								exprStr = substr; % no preface
 							case -1
-								str = ['-',substr]; % compact minus sign (implied unitary)
+								exprStr = ['-',substr]; % compact minus sign (implied unitary)
 							otherwise
 								error('Unexpected sign')
 						end
@@ -233,11 +265,23 @@ classdef Expression % non-handle
 							otherwise
 								error('Unexpected sign')
 						end
-						str = [ str, sgn, substr ]; %#ok<AGROW>
+						exprStr = [ exprStr, sgn, substr ]; %#ok<AGROW>
 					end
 				end
-				
 			end
+			
+			% Prepare a representation of the contained equations
+			eqsStr = ''; % a backup if 
+			for k = 1:numel( expr.auxEqs )
+				auxEqStr = expr.auxEqs(k).toString();
+				if k == 1
+					eqsStr = auxEqStr;
+				else % k > 1
+					% Concatenate, with a newline separating each one
+					eqsStr = sprintf('%s\n%s',eqsStr,auxEqStr);
+				end
+			end
+			
 		end
 		function sets = getPossibleValues(expr,termIndices)
 			
@@ -380,15 +424,10 @@ classdef Expression % non-handle
 	end
 	methods (Access = private)
 		% Creates an auxiliary equation representing auxExpr == 0
-		function expr = constructAndRecordAuxEq(expr,auxExpr,parentLabel)
+		function expr = constructAndRecordAuxEq(expr,auxExpr)
 			
-			if exist('parentLabel','var')
-				sublabel = getExcelColumnLabel( numel(expr.auxEqs)+1 );
-				eqLabel = sprintf('%s%s',parentLabel,sublabel);
-			else
-				eqLabel = '?'; % defer meaningful setting to later
-			end
-			auxEq = Equation(auxExpr,0,eqLabel);
+			isAuxiliary = true;
+			auxEq = Equation(auxExpr,0,isAuxiliary);
 			% Record a copy of the new equation on the expression
 			expr.auxEqs(end+1,:) = auxEq;
 			
@@ -438,7 +477,7 @@ classdef Expression % non-handle
 		% This does a similar operation as simplify(), but termwise. This
 		% swaps out complex *terms*, which is any term which is not a no-op
 		% term.
-		function [expr,changed] = simplifyTermwise(expr,parentLabel)
+		function [expr,changed] = simplifyTermwise(expr)
 			
 			changed = false;
 			
@@ -487,7 +526,7 @@ classdef Expression % non-handle
 				auxExpr.termVars{1,2} = auxVar; % overwrite first row with aux var
 				
 				% Prepare the auxiliary equation it will be formally defined by
-				expr = expr.constructAndRecordAuxEq( auxExpr, parentLabel );
+				expr = expr.constructAndRecordAuxEq( auxExpr );
 				
 				
 				% Substitute in this new auxiliary variable. The sign is

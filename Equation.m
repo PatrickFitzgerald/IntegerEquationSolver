@@ -1,48 +1,34 @@
-classdef Equation < handle
+classdef Equation % not handle
 	
 	properties (GetAccess = public, SetAccess = private)
 		LHS Expression;
 		RHS SetOfIntegers;
 		label = '';
 	end
+	properties (Access = private)
+		isAuxiliary (1,1) logical = true; % This indicates whether the user directly created this equation or not
+	end
 	
-	methods
+	
+	% * * * * * * * * * * * * * * * CONSTRUCTOR * * * * * * * * * * * * * *
+	methods (Access = public)
 		% LHS can be Variable or Expression
 		% RHS can either be scalar integer, or SetOfIntegers
-		function eq_ = Equation(LHS,RHS,label)
+		function eq_ = Equation(LHS,RHS,isAuxiliary)
 			
-			% If the label was provided, assign it
-			if exist('label','var')
-				eq_.label = label;
-			end
-			
+			% Cast the inputs, if necessary
 			if isa(LHS,'Variable')
-				temp = LHS;
-				LHS = Expression();
-				LHS.varList_P = temp;
+				LHS = Expression.fromVariable(LHS);
 			end
-			assert( isa(LHS,'Expression'), 'The input must be an Expression or be convertible to an Expression');
-			
 			if ~isa(RHS,'SetOfIntegers')
-				assert( isnumeric(RHS) && isscalar(RHS) && mod(RHS,1)==0, 'The RHS must be an integer');
 				RHS = SetOfIntegers.makeConstant(RHS);
 			end
-			
+			% Store the LHS,RHS. Matlab will do some additional type/size
+			% checks.
 			eq_.LHS = LHS;
 			eq_.RHS = RHS;
 			
-			% Register this equation
-			Equation.addEquation(eq_);
-			
-			% Determine if any of the LHS's aux equations need their name
-			% updated
-			needsFixing = strcmp( {eq_.LHS.auxEqs.label}, '?' );
- 			for k = 1:numel(needsFixing)
-				if needsFixing(k)
-					eq_.LHS.auxEqs(k).label = sprintf('%s%s', eq_.label, getExcelColumnLabel(k));
-					fprintf('<RNM> %s\n',eq_.LHS.auxEqs(k).toString);
-				end
-			end
+			eq_.isAuxiliary = isAuxiliary;
 			
 			% Try to simplify the equation. Only perform this if we're not
 			% working with an auxiliary equation already
@@ -50,42 +36,83 @@ classdef Equation < handle
 				% This will simplify the equation by fracturing it into
 				% separate equations. This allows us to place more specific
 				% constraints on these 
-				[LHS_,changed] = eq_.LHS.simplifyTermwise(eq_.label);
+				[LHS_,changed] = eq_.LHS.simplifyTermwise();
 				% If anything happened, apply it and announce it.
 				if changed
 					eq_.LHS = LHS_;
-					fprintf('<SUB> %s\n',eq_.toString());
 				end
 			end
 			
 		end
-		
-		function str = toString(eq_)
-			labelLength = Equation.getMaxLabelLength();
-			assert(isscalar(eq_),'Only one eq can be stringified at a time')
-			if cardinality( eq_.RHS ) == 1
-				rhsString = sprintf('%d',eq_.RHS.ranges(1,1));
-			else
-				rhsString = sprintf('Any of %s', eq_.RHS.toString() );
-			end
-			str = sprintf('[\b%s]\b%s %s = %s', eq_.label, repmat(' ',1,labelLength-numel(eq_.label)), eq_.LHS.toString, rhsString );
-		end
+	end
+	% * * * * * * * * * * * * * * * CONSTRUCTOR * * * * * * * * * * * * * *
+	
+	
+	% * * * * * * * * * OVERLOADED OPERATORS/FUNCTIONS * * * * * * * * * *
+	methods (Access = public)
 		function disp(eqs)
-			for k = 1:numel(eqs)
-				fprintf('%s\n',eqs(k).toString());
-			end
-		end
-		
-		function changed = refine(eq_)
 			
-% TODO: there will be equations (primarily auxiliary equations) that have
-% RHS values with more options than what the LHS will ever use (i.e. the
-% equation is not constraining). These should be removed.
-% This will also be a good spot to detect if an equation is impossible,
-% i.e. cardinality on RHS = 0
+			% Report size
+			sizeStr = createSizeStr(size(eqs));
+			fprintf( '  %s Equation\n', sizeStr );
+			
+			% Report each item, indenting them each, so they are
+			% distinct from the size preface
+			for k = 1:numel(eqs)
+				rawStr = eqs(k).toString();
+				fprintf( '%s\n', indent(rawStr, '    ' ) );
+			end
+			% And an extra newline for good measure.
+			fprintf('\n');
+			
+		end
+	end
+	% * * * * * * * * * OVERLOADED OPERATORS/FUNCTIONS * * * * * * * * * *
+	
+	
+	% * * * * * * * * * * * * HELPER FUNCTIONS * * * * * * * * * * * * * *
+	methods (Access = public)
+		function str = toString(eq_)
+			
+			assert(isscalar(eq_),'Only one equation can be stringified at a time')
+			
+			% Generate the stringification of the LHS expression, which may
+			% contain some number of sub-equations (which them may contain
+			% sub-equations, etc)
+			[strLHS,subEqStr] = eq_.LHS.toString();
+			
+			% We'll indent the sub equations
+			subEqStr = indent( subEqStr, '  ' );
+			% And we'll insert a newline at the front (if it's not empty)
+			if ~isempty(subEqStr)
+				subEqStr = sprintf('\n%s',subEqStr);
+			end
+			
+			% Prepare the representation of the RHS
+			if cardinality( eq_.RHS ) == 1
+				strRHS = sprintf('%d',eq_.RHS.ranges(1,1));
+			else
+				strRHS = sprintf('Any of %s', eq_.RHS.toString() );
+			end
+			
+			% Bring it all together
+			str = sprintf('[\b%s]\b %s = %s%s', eq_.label, strLHS, strRHS, subEqStr );
+			
+		end
+	end
+	% * * * * * * * * * * * * HELPER FUNCTIONS * * * * * * * * * * * * * *
+	
+	
+	% * * * * * * * * * * * EQUATION MANIPULATION  * * * * * * * * * * * * 
+	methods (Access = public)
+		function [eq_,changed] = refine(eq_)
+			
+% if we make equations with more flexibility on the RHS than the LHS needs,
+% we should mark that equation as 0=0, since it will confer no increased
+% info
 			
 			% Remove solved terms
-			changed = rearrangeConstants(eq_);
+			[eq_,changed] = rearrangeConstants(eq_);
 			
 			% Get a list of values
 			numTerms = eq_.LHS.numTerms;
@@ -111,8 +138,15 @@ classdef Equation < handle
 				
 			end
 			
+			% Recursively refine sub-equations
+			for k = 1:numel(eq_.LHS.auxEqs)
+				eq_.LHS.auxEqs(k) = eq_.LHS.auxEqs(k).refine();
+			end
+			
 		end
-		function changed = rearrangeConstants(eq_)
+	end
+	methods (Access = private)
+		function [eq_,changed] = rearrangeConstants(eq_)
 			
 			% Get a copy of the values for all the completely solved terms
 			numTerms = eq_.LHS.numTerms;
@@ -131,81 +165,63 @@ classdef Equation < handle
 			
 			changed = false;
 			if any(isSolvedVec)
-				fprintf('<UPD> %s\n',eq_.toString())
+				fprintf('<UPD> %s\n',hangingIndent(eq_.toString(),'      '))
 				changed = true;
 			end
 			
 		end
 	end
+	% * * * * * * * * * * * EQUATION MANIPULATION  * * * * * * * * * * * * 
 	
-	methods (Static) % global functions
-		function clearList()
-			Equation.eqListInterface('clear');
-		end
-		function addEquation(eq_)
-			Equation.eqListInterface('add',eq_);
-		end
-		function eqList = getEqList()
-			eqList = Equation.eqListInterface('getFull');
-		end
-		function num = getNumAuxiliary()
-			num = Equation.eqListInterface('getNumAuxiliary');
-		end
-		function length_ = getMaxLabelLength()
-			length_ = Equation.eqListInterface('getMaxLabelLength');
+	
+	% * * * * * * * * * * * * * EQUATION LABELING * * * * * * * * * * * * *
+	methods (Access = public)
+		% This ingests a vector of equation objects and assigns them
+		% ordered labels like "Eq 03" (by omitting the `preface` argument).
+		% This also re-labels any contained auxiliary equations
+		% recursively.
+		function eqs = assignOrderedLabels(eqs)
+			
+			% Require this gets called only on non-auxiliary equations
+			assert( ~any([eqs.isAuxiliary]), 'This function can only be called on non-auxiliary equations, i.e. user created.' );
+			
+			% Call the internal function
+			eqs = assignOrderedLabelsInternal(eqs,'Eq ');
+			
 		end
 	end
-	methods (Static, Access = private)
-		function varargout = eqListInterface(mode,varargin)
+	methods (Access = private)
+		% This ingests a vector of equation objects and assigns them
+		% ordered labels like "Eq 03" (by omitting the `preface` argument).
+		% This also re-labels any contained auxiliary equations
+		% recursively.
+		function eqs = assignOrderedLabelsInternal(eqs,preface)
 			
-			persistent eqList numProper numAuxiliary maxLabelLength;
-			if ~isa(eqList,'Equation') || isempty(numProper) || isempty(numAuxiliary) || isempty(maxLabelLength) || isnumeric(eqList) || strcmp(mode,'clear')
-				eqList = Equation.empty(0,1);
-				numProper = 0;
-				numAuxiliary = 0;
-				maxLabelLength = 0;
-				fprintf('Equation list has been set to an empty state\n')
-				% If we were asked to clear, then we can terminate
-				if strcmp(mode,'clear')
-					return
+			% Plan how we'll pad with zeros
+			maxQuant = numel(eqs);
+			labelFormat = sprintf('%%s%%0%uu',getNumDigits(maxQuant));
+			
+			% Throw a warning if we're relabeling a non-empty label on a
+			% non-auxiliary equation.
+			isNonAuxAndNonEmpty = arrayfun( @(e) ~isempty(e.label) && ~e.isAuxiliary, eqs(:) );
+			if any(isNonAuxAndNonEmpty)
+				s = sum(isNonAuxAndNonEmpty);
+				warning('Overwriting %u equation label%s',s,repmat('s',1,s~=1));
+			end
+			
+			for k = 1:maxQuant
+				newLabel = sprintf(labelFormat,preface,k);
+				% Assign the label
+				eqs(k).label = newLabel;
+				% Recur if needed
+				if numel(eqs(k).LHS.auxEqs) > 0
+					subPreface = [newLabel,'.']; % separate numbers with a period
+					eqs(k).LHS.auxEqs = assignOrderedLabelsInternal( eqs(k).LHS.auxEqs, subPreface );
 				end
 			end
 			
-% Reminder: if removing an equation, don't decrement the
-% numProper/numAuxiliary. These should still be useful for assigning new
-% labels.
-			
-			switch mode
-				case 'add'
-					eq_ = varargin{1};
-					eqList(end+1,1) = eq_;
-					
-					% If there isn't a label yet, assign one
-					if isempty(eq_.label)
-						eq_.label = sprintf('Eq %u',numProper+1);
-						numProper = numProper + 1;
-					else
-						numAuxiliary = numAuxiliary + 1;
-					end
-					
-					maxLabelLength = max( maxLabelLength, numel(eq_.label) );
-					
-					fprintf('<NEW> %s\n',eq_.toString())
-					return
-				case 'getFull'
-					varargout = {eqList};
-					return
-				case 'getNumAuxiliary'
-					varargout = {numAuxiliary};
-					return
-				case 'getMaxLabelLength'
-					varargout = {maxLabelLength};
-					return
-				otherwise
-					error('Unknown mode');
-			end
-			
 		end
 	end
+	% * * * * * * * * * * * * * EQUATION LABELING * * * * * * * * * * * * *
 	
 end

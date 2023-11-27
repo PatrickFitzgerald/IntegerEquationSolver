@@ -153,16 +153,15 @@ classdef Variable < handle
 			exprC = ldivide(A,B);
 		end
 		function eqC = eq(varA,B)
-			% Try to form an equation
-			eqC = Equation(varA,B);
+			% We'll cast A to an expression and defer to the Expression's
+			% implementation of multiplication
+			exprA = Expression.fromVariable(varA);
+			eqC = exprA == B;
 		end
 		function disp(vars)
-			xSymbol = char(215);
-			temp = compose(['%u',xSymbol], size(vars));
-			sizeStr = cat(2,'', temp{:} );
-			sizeStr(end) = [];
+			sizeStr = createSizeStr(size(vars));
 			
-			fprintf( '  %s Variables\n', sizeStr );
+			fprintf( '  %s Variable\n', sizeStr );
 			for k = 1:numel(vars)
 				if vars(k).getIsSolved()
 					fprintf( '    %s = %d\n', vars(k).label, vars(k).possibleValues.ranges(1,1) );
