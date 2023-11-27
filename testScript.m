@@ -1,3 +1,6 @@
+addpath('classes')
+addpath('utilities')
+
 clear all
 
 Variable.clearGlobal()
