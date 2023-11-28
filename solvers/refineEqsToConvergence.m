@@ -1,11 +1,9 @@
-function eqList = refineEqsToConvergence(x,eqList)
+function eqList = refineEqsToConvergence(eqList)
 	% Repeat this loop of manipulating equations until eventually nothing
 	% changes.
 	anyChanges = true;
 	while anyChanges
 		anyChanges = false;
-		
-		reportNaiveTradeSpaceSize(x)
 		
 		% Refine the domain
 		for k = 1:numel(eqList)
