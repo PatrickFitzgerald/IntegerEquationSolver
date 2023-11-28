@@ -609,7 +609,7 @@ classdef Expression % non-handle
 			% Determine if we changed anything...
 			endingCardinality = cardinality( expr.getPossibleValues(termIndex) );
 			changed = startingCardinality > endingCardinality;
-			if changed
+			if changed && GlobalParams.printEstShrinkage
 				fprintf('Constrained possibilities by 10^%.2f\n',log10(startingCardinality/endingCardinality));
 			end
 			

@@ -165,7 +165,9 @@ classdef Equation % not handle
 			
 			changed = false;
 			if any(isSolvedVec)
-				fprintf('<UPD> %s\n',hangingIndent(eq_.toString(),'      '))
+				if GlobalParams.printEquationUpdates
+					fprintf('<UPD> %s\n',hangingIndent(eq_.toString(),'      '))
+				end
 				changed = true;
 			end
 			

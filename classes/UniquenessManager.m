@@ -74,7 +74,7 @@ classdef UniquenessManager
 				end
 				
 				% Only report progress once per family
-				if totalEndingLog10 < totalStartingLog10
+				if totalEndingLog10 < totalStartingLog10 && GlobalParams.printEstShrinkage
 					fprintf('Constrained possibilities by uniqueness by 10^%.2f\n',totalStartingLog10 - totalEndingLog10)
 				end
 				
